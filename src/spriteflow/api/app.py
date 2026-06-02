@@ -1,0 +1,136 @@
+"""FastAPI 应用工厂"""
+
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from dotenv import load_dotenv
+load_dotenv()
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+from ..config import settings
+from ..asset_hub.db import AssetDB
+from ..storage.cos_storage import COSStorage
+from ..storage.local_storage import LocalStorage
+from ..providers.seedream import SeedreamProvider
+from ..providers.rembg_provider import RembgProvider
+from ..providers.router import CapabilityRouter
+from ..engine.cache import CacheManager
+from ..engine.executor import Executor
+from .deps import set_db, set_storage, set_router, set_executor
+
+# 导入节点以触发注册
+from ..nodes import *  # noqa: F401, F403
+
+from .workflows import router as workflows_router
+from .assets import router as assets_router
+from .nodes import router as nodes_router
+from .routing import router as routing_router
+from .generate import router as generate_router
+from .jobs import router as jobs_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期：启动时初始化，关闭时清理"""
+    settings.ensure_dirs()
+
+    # 初始化数据库
+    db = AssetDB()
+    await db.connect()
+    await db.init_tables()
+    set_db(db)
+
+    # 初始化存储
+    try:
+        storage = COSStorage()
+        # 验证 COS 可用
+        print(f"[SpriteFlow] COS 存储初始化成功: bucket={storage.bucket}, region={storage.region}")
+    except Exception as e:
+        print(f"[SpriteFlow] COS 初始化失败({e})，使用本地存储")
+        storage = LocalStorage()
+    set_storage(storage)
+
+    # 初始化路由器
+    router = CapabilityRouter()
+    router.register_provider(
+        SeedreamProvider(
+            api_key=settings.ark_api_key,
+            base_url=settings.ark_base_url,
+            model=settings.seedream_model,
+        )
+    )
+    router.register_provider(RembgProvider())
+    router.set_credential("seedream", settings.ark_api_key)
+    set_router(router)
+    print(
+        f"[SpriteFlow] Seedream 初始化: model={settings.seedream_model}, "
+        f"key_set={'yes' if settings.ark_api_key else 'NO'}"
+    )
+
+    # 初始化执行器
+    executor = Executor(
+        cache=CacheManager(),
+        router=router,
+        storage=storage,
+    )
+    set_executor(executor)
+
+    yield
+
+    # 清理
+    await db.close()
+
+
+def create_app() -> FastAPI:
+    """创建 FastAPI 应用"""
+    app = FastAPI(
+        title="SpriteFlow",
+        description="面向 2D 游戏素材生产的节点化工作流平台",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
+
+    # CORS：dev 模式前端 :5173 跨域
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    app.include_router(workflows_router, prefix="/api", tags=["workflows"])
+    app.include_router(assets_router, prefix="/api", tags=["assets"])
+    app.include_router(nodes_router, prefix="/api", tags=["nodes"])
+    app.include_router(routing_router, prefix="/api", tags=["routing"])
+    app.include_router(generate_router, prefix="/api", tags=["generate"])
+    app.include_router(jobs_router, prefix="/api", tags=["jobs"])
+
+    @app.get("/api/health")
+    async def health():
+        return {
+            "status": "ok",
+            "version": "0.1.0",
+            "model": settings.seedream_model,
+            "ark_configured": bool(settings.ark_api_key),
+        }
+
+    # 兼容旧路径
+    @app.get("/health")
+    async def health_legacy():
+        return await health()
+
+    # 挂载前端静态产物（生产模式）：web/dist
+    web_dist = settings.project_root / "web" / "dist"
+    if web_dist.exists():
+        app.mount("/", StaticFiles(directory=str(web_dist), html=True), name="web")
+
+    return app
+
+
+app = create_app()

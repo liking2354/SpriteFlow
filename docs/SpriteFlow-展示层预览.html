@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpriteFlow — 视觉设计预览</title>
+<style>
+  :root{
+    --bg-0:#08090d; --bg-1:#0d0f15; --bg-2:#12151d; --bg-3:#171b25;
+    --line:#222734; --line-soft:#1a1e28;
+    --txt-0:#f2f4f8; --txt-1:#aab2c5; --txt-2:#6c7488; --txt-3:#454c5e;
+    --acc:#5b8cff; --acc-soft:#5b8cff22;
+    --cyan:#3ee0d0; --violet:#a571ff; --pink:#ff6ba6; --amber:#ffb648; --green:#56d97a;
+    --r-s:8px; --r-m:12px; --r-l:18px;
+    --fs:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,sans-serif;
+    --fm:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--bg-0); color:var(--txt-0); font-family:var(--fs);
+    font-size:13px; line-height:1.5; overflow:hidden; letter-spacing:.1px;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:#2a3040;border-radius:4px}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  .app{display:grid;grid-template-rows:52px 1fr 30px;height:100vh}
+
+  /* ---------- TOP BAR ---------- */
+  .topbar{
+    display:flex;align-items:center;gap:18px;padding:0 18px;
+    background:linear-gradient(180deg,var(--bg-2),var(--bg-1));
+    border-bottom:1px solid var(--line);
+  }
+  .logo{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px}
+  .logo .mark{
+    width:26px;height:26px;border-radius:8px;position:relative;
+    background:linear-gradient(135deg,var(--acc),var(--violet));
+    box-shadow:0 0 16px #5b8cff66;
+  }
+  .logo .mark::after{
+    content:"";position:absolute;inset:7px;border-radius:3px;
+    background:var(--bg-1);
+  }
+  .logo .mark::before{
+    content:"";position:absolute;inset:0;border-radius:8px;
+    background:linear-gradient(135deg,var(--cyan),transparent 60%);opacity:.5;
+  }
+  .logo span.sub{color:var(--txt-2);font-weight:400;font-size:11px;margin-left:2px}
+  .crumbs{display:flex;align-items:center;gap:8px;color:var(--txt-2);font-size:12px}
+  .crumbs b{color:var(--txt-1);font-weight:500}
+  .crumbs .dot{width:3px;height:3px;border-radius:50%;background:var(--txt-3)}
+  .top-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .pill{
+    display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:99px;
+    background:var(--bg-3);border:1px solid var(--line);color:var(--txt-1);
+    font-size:11px;cursor:pointer;transition:.18s;
+  }
+  .pill:hover{border-color:#2f3647;color:var(--txt-0)}
+  .pill .led{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+  .btn-run{
+    display:flex;align-items:center;gap:7px;padding:7px 15px;border-radius:var(--r-s);
+    background:linear-gradient(135deg,var(--acc),#4f7dff);color:#fff;font-weight:600;
+    font-size:12px;cursor:pointer;border:none;box-shadow:0 4px 16px #4f7dff44;transition:.18s;
+  }
+  .btn-run:hover{transform:translateY(-1px);box-shadow:0 6px 20px #4f7dff66}
+  .btn-run svg{width:13px;height:13px}
+  .avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--pink),var(--amber));border:1px solid #ffffff22}
+
+  /* ---------- MAIN ---------- */
+  .main{display:grid;grid-template-columns:230px 1fr 280px;overflow:hidden}
+
+  /* ---- LEFT: node palette ---- */
+  .left{background:var(--bg-1);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+  .panel-h{padding:14px 16px 8px;font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--txt-2);font-weight:600;display:flex;align-items:center;gap:8px}
+  .search{margin:6px 12px 10px;display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg-0);border:1px solid var(--line);border-radius:var(--r-s);color:var(--txt-2);font-size:12px}
+  .search svg{width:13px;height:13px;opacity:.6}
+  .node-list{overflow-y:auto;padding:0 10px 16px;flex:1}
+  .ncat{font-size:10.5px;color:var(--txt-3);text-transform:uppercase;letter-spacing:1px;margin:14px 6px 7px;font-weight:600}
+  .nitem{
+    display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-s);
+    cursor:grab;transition:.14s;margin-bottom:3px;border:1px solid transparent;
+  }
+  .nitem:hover{background:var(--bg-3);border-color:var(--line)}
+  .nitem .ic{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex-shrink:0}
+  .nitem .ic svg{width:13px;height:13px}
+  .nitem .tx{font-size:12px;color:var(--txt-1);font-weight:500}
+  .nitem .tg{margin-left:auto;font-size:9px;color:var(--txt-3);font-family:var(--fm)}
+  .ic.gen{background:#5b8cff22;color:var(--acc)}
+  .ic.proc{background:#ff6ba622;color:var(--pink)}
+  .ic.pix{background:#ffb64822;color:var(--amber)}
+  .ic.flow{background:#a571ff22;color:var(--violet)}
+  .ic.out{background:#56d97a22;color:var(--green)}
+
+  /* ---- CENTER: canvas ---- */
+  .canvas{
+    position:relative;overflow:hidden;
+    background:
+      radial-gradient(circle at 50% 0%, #11151f 0%, var(--bg-0) 70%),
+      var(--bg-0);
+  }
+  .grid-bg{
+    position:absolute;inset:0;
+    background-image:
+      linear-gradient(#ffffff06 1px,transparent 1px),
+      linear-gradient(90deg,#ffffff06 1px,transparent 1px);
+    background-size:26px 26px;
+    mask-image:radial-gradient(circle at 50% 45%,#000 30%,transparent 85%);
+  }
+  .canvas-hint{position:absolute;top:14px;left:16px;font-size:11px;color:var(--txt-3);font-family:var(--fm);display:flex;gap:14px;z-index:5}
+  .canvas-hint b{color:var(--txt-2);font-weight:500}
+
+  .flow{position:absolute;inset:0;z-index:2}
+  svg.wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
+
+  .node{
+    position:absolute;width:172px;border-radius:var(--r-m);
+    background:linear-gradient(180deg,#1a1f2bdd,#12151ddd);
+    border:1px solid var(--line);backdrop-filter:blur(8px);
+    box-shadow:0 8px 30px #00000066;transition:.2s;cursor:default;
+  }
+  .node:hover{border-color:#2f3647;box-shadow:0 10px 36px #00000088}
+  .node.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc),0 10px 40px #4f7dff44}
+  .node .nh{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line-soft)}
+  .node .nh .d{width:7px;height:7px;border-radius:50%}
+  .node .nh .t{font-size:12px;font-weight:600;color:var(--txt-0)}
+  .node .nh .cap{margin-left:auto;font-size:8.5px;font-family:var(--fm);padding:2px 6px;border-radius:5px;background:var(--bg-0);color:var(--txt-2)}
+  .node .nb{padding:9px 11px;display:flex;flex-direction:column;gap:7px}
+  .node .row{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--txt-2)}
+  .node .row .v{color:var(--txt-1);font-family:var(--fm);font-size:10.5px}
+  .node .prev{height:46px;border-radius:6px;margin-top:2px;background:var(--bg-0);border:1px solid var(--line-soft);position:relative;overflow:hidden;display:grid;place-items:center}
+  .node .badge{position:absolute;top:6px;right:6px;font-size:8px;font-family:var(--fm);padding:2px 5px;border-radius:4px}
+  .port{position:absolute;width:11px;height:11px;border-radius:50%;background:var(--bg-1);border:2px solid var(--txt-3);top:50%}
+  .port.in{left:-6px}.port.out{right:-6px}
+  .port.act{border-color:var(--acc);background:var(--acc);box-shadow:0 0 8px var(--acc)}
+
+  .d-blue{background:var(--acc);box-shadow:0 0 8px var(--acc)}
+  .d-pink{background:var(--pink);box-shadow:0 0 8px var(--pink)}
+  .d-amber{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+  .d-violet{background:var(--violet);box-shadow:0 0 8px var(--violet)}
+  .d-green{background:var(--green);box-shadow:0 0 8px var(--green)}
+
+  /* mini sprite preview via css */
+  .sprite{width:30px;height:30px;image-rendering:pixelated;border-radius:3px;
+    background:
+      conic-gradient(from 0deg,#5b8cff,#a571ff,#3ee0d0,#5b8cff);
+    mask:radial-gradient(circle at 50% 38%,#000 22%,transparent 23%) ,
+         linear-gradient(#000,#000);
+    mask-composite:exclude;
+  }
+  .dir8{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding:5px}
+  .dir8 i{height:8px;border-radius:2px;background:linear-gradient(135deg,var(--acc),var(--violet));opacity:.85}
+
+  /* ---- RIGHT: inspector ---- */
+  .right{background:var(--bg-1);border-left:1px solid var(--line);overflow-y:auto}
+  .insp-head{padding:16px 16px 12px;border-bottom:1px solid var(--line)}
+  .insp-head .tt{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600}
+  .insp-head .tt .d{width:8px;height:8px;border-radius:50%}
+  .insp-head .meta{margin-top:6px;font-size:11px;color:var(--txt-2);font-family:var(--fm)}
+  .insp-sec{padding:14px 16px;border-bottom:1px solid var(--line-soft)}
+  .insp-sec .sh{font-size:10.5px;text-transform:uppercase;letter-spacing:1px;color:var(--txt-3);margin-bottom:11px;font-weight:600}
+  .field{margin-bottom:13px}
+  .field label{display:block;font-size:11px;color:var(--txt-2);margin-bottom:6px}
+  .field .inp{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-0);border:1px solid var(--line);border-radius:var(--r-s);font-size:12px;color:var(--txt-0);font-family:var(--fm)}
+  .field .inp.ta{height:auto;line-height:1.5;color:var(--txt-1);font-family:var(--fs);font-size:11.5px}
+  .slider{position:relative;height:4px;background:var(--bg-3);border-radius:2px;margin:14px 2px 6px}
+  .slider .fill{position:absolute;left:0;top:0;bottom:0;width:62%;background:linear-gradient(90deg,var(--acc),var(--cyan));border-radius:2px}
+  .slider .knob{position:absolute;left:62%;top:50%;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 2px 8px #0008}
+  .seg{display:flex;background:var(--bg-0);border:1px solid var(--line);border-radius:var(--r-s);padding:3px;gap:3px}
+  .seg b{flex:1;text-align:center;padding:6px;font-size:11px;border-radius:6px;color:var(--txt-2);cursor:pointer;font-weight:500}
+  .seg b.on{background:var(--acc-soft);color:var(--acc)}
+  .prov-row{display:flex;align-items:center;gap:9px;padding:9px 11px;background:var(--bg-0);border:1px solid var(--line);border-radius:var(--r-s)}
+  .prov-row .ld{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+  .prov-row .nm{font-size:12px;font-weight:500}
+  .prov-row .cp{margin-left:auto;font-size:9.5px;font-family:var(--fm);color:var(--txt-2)}
+
+  /* ---- BOTTOM bar ---- */
+  .statusbar{display:flex;align-items:center;gap:16px;padding:0 16px;background:var(--bg-1);border-top:1px solid var(--line);font-size:11px;color:var(--txt-2);font-family:var(--fm)}
+  .statusbar .s{display:flex;align-items:center;gap:6px}
+  .statusbar .led{width:6px;height:6px;border-radius:50%}
+  .prog{margin-left:auto;display:flex;align-items:center;gap:10px;min-width:220px}
+  .prog .bar{flex:1;height:4px;background:var(--bg-3);border-radius:2px;overflow:hidden}
+  .prog .bar i{display:block;height:100%;width:68%;background:linear-gradient(90deg,var(--acc),var(--cyan));border-radius:2px;animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.8}50%{opacity:1}}
+
+  .glow{position:absolute;border-radius:50%;filter:blur(80px);opacity:.18;pointer-events:none;z-index:0}
+  .glow.g1{width:340px;height:340px;background:var(--acc);top:-80px;left:30%}
+  .glow.g2{width:280px;height:280px;background:var(--violet);bottom:-60px;right:18%}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="mark"></div>
+      SpriteFlow <span class="sub">v0.1</span>
+    </div>
+    <div class="crumbs">
+      <b>yqcr</b><span class="dot"></span>
+      <span>工作流</span><span class="dot"></span>
+      <b>Knight · 8方向走路</b>
+    </div>
+    <div class="top-actions">
+      <div class="pill"><span class="led"></span> 引擎在线</div>
+      <div class="pill">⌘ 缓存 142 命中</div>
+      <button class="btn-run">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        运行工作流
+      </button>
+      <div class="avatar"></div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- LEFT NODE PALETTE -->
+    <div class="left">
+      <div class="panel-h">节点库</div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+        搜索节点…
+      </div>
+      <div class="node-list">
+        <div class="ncat">生成</div>
+        <div class="nitem"><div class="ic gen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M3 12h18"/></svg></div><div class="tx">图生图</div><div class="tg">img2img</div></div>
+        <div class="nitem"><div class="ic gen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m9 10 4 2-4 2z" fill="currentColor"/></svg></div><div class="tx">图生视频</div><div class="tg">i2v</div></div>
+        <div class="nitem"><div class="ic gen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 12h16"/></svg></div><div class="tx">视频抽帧</div><div class="tg">frames</div></div>
+
+        <div class="ncat">处理</div>
+        <div class="nitem"><div class="ic proc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M21 3 3 21"/></svg></div><div class="tx">去背景</div><div class="tg">rembg</div></div>
+        <div class="nitem"><div class="ic proc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></div><div class="tx">帧切分对齐</div><div class="tg">align</div></div>
+
+        <div class="ncat">像素</div>
+        <div class="nitem"><div class="ic pix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18"/></svg></div><div class="tx">调色板量化</div><div class="tg">quantize</div></div>
+        <div class="nitem"><div class="ic pix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20 20 4M4 4l16 16"/></svg></div><div class="tx">最近邻缩放</div><div class="tg">scale</div></div>
+
+        <div class="ncat">编排</div>
+        <div class="nitem"><div class="ic flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M12 2v6M12 16v6M2 12h6M16 12h6"/></svg></div><div class="tx">8方向展开</div><div class="tg">fanout</div></div>
+        <div class="nitem"><div class="ic flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="6" height="6"/><rect x="15" y="3" width="6" height="6"/><rect x="3" y="15" width="6" height="6"/><rect x="15" y="15" width="6" height="6"/></svg></div><div class="tx">网格拼图</div><div class="tg">pack</div></div>
+
+        <div class="ncat">导出</div>
+        <div class="nitem"><div class="ic out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></div><div class="tx">导出 yqcr</div><div class="tg">export</div></div>
+      </div>
+    </div>
+
+    <!-- CENTER CANVAS -->
+    <div class="canvas">
+      <div class="glow g1"></div>
+      <div class="glow g2"></div>
+      <div class="grid-bg"></div>
+      <div class="canvas-hint">
+        <span><b>滚轮</b> 缩放</span><span><b>空格+拖拽</b> 平移</span><span><b>⌘ K</b> 添加节点</span>
+      </div>
+
+      <!-- wires -->
+      <svg class="wires" viewBox="0 0 1000 600" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="w" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#5b8cff"/><stop offset="1" stop-color="#a571ff"/>
+          </linearGradient>
+        </defs>
+        <path d="M188 120 C 250 120, 250 175, 312 175" stroke="url(#w)" stroke-width="2" fill="none"/>
+        <path d="M484 175 C 545 175, 545 130, 608 130" stroke="url(#w)" stroke-width="2" fill="none"/>
+        <path d="M484 175 C 545 175, 545 300, 608 300" stroke="#5b8cff" stroke-width="2" fill="none" opacity=".5"/>
+        <path d="M188 360 C 250 360, 250 300, 312 300" stroke="#ff6ba6" stroke-width="2" fill="none"/>
+        <path d="M484 300 C 545 300, 545 430, 608 430" stroke="#ffb648" stroke-width="2" fill="none"/>
+      </svg>
+
+      <div class="flow">
+        <!-- node: load -->
+        <div class="node" style="left:24px;top:84px">
+          <div class="nh"><span class="d d-blue"></span><span class="t">角色原型</span><span class="cap">load</span></div>
+          <div class="nb">
+            <div class="row">资产 <span class="v">knight_001</span></div>
+            <div class="prev"><div class="sprite"></div><span class="badge" style="background:#5b8cff22;color:#5b8cff">PNG</span></div>
+          </div>
+          <span class="port out act"></span>
+        </div>
+
+        <!-- node: fanout -->
+        <div class="node sel" style="left:312px;top:118px">
+          <div class="nh"><span class="d d-violet"></span><span class="t">8方向展开</span><span class="cap">×8</span></div>
+          <div class="nb">
+            <div class="row">方向集 <span class="v">dir1–dir8</span></div>
+            <div class="prev"><div class="dir8"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+          </div>
+          <span class="port in act"></span><span class="port out act"></span>
+        </div>
+
+        <!-- node: generate -->
+        <div class="node" style="left:608px;top:74px">
+          <div class="nh"><span class="d d-blue"></span><span class="t">图生图</span><span class="cap">nanobanana</span></div>
+          <div class="nb">
+            <div class="row">能力 <span class="v">img2img</span></div>
+            <div class="row">batch <span class="v">8 / 8</span></div>
+            <div class="prev"><div class="dir8"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span class="badge" style="background:#56d97a22;color:#56d97a">✓ 缓存</span></div>
+          </div>
+          <span class="port in act"></span><span class="port out act"></span>
+        </div>
+
+        <!-- node: rembg -->
+        <div class="node" style="left:24px;top:324px">
+          <div class="nh"><span class="d d-pink"></span><span class="t">去背景</span><span class="cap">rembg</span></div>
+          <div class="nb">
+            <div class="row">本地 <span class="v">BiRefNet</span></div>
+            <div class="prev"><div class="sprite" style="opacity:.9"></div><span class="badge" style="background:#ff6ba622;color:#ff6ba6">alpha</span></div>
+          </div>
+          <span class="port in act"></span><span class="port out act"></span>
+        </div>
+
+        <!-- node: quantize -->
+        <div class="node" style="left:608px;top:262px">
+          <div class="nh"><span class="d d-amber"></span><span class="t">调色板量化</span><span class="cap">pixel</span></div>
+          <div class="nb">
+            <div class="row">颜色数 <span class="v">32</span></div>
+            <div class="prev"><div class="dir8"><i style="background:#ffb648"></i><i style="background:#ff6ba6"></i><i style="background:#5b8cff"></i><i style="background:#56d97a"></i><i style="background:#a571ff"></i><i style="background:#3ee0d0"></i><i style="background:#ffb648"></i><i style="background:#ff6ba6"></i></div></div>
+          </div>
+          <span class="port in act"></span><span class="port out act"></span>
+        </div>
+
+        <!-- node: export -->
+        <div class="node" style="left:608px;top:404px">
+          <div class="nh"><span class="d d-green"></span><span class="t">导出 yqcr</span><span class="cap">export</span></div>
+          <div class="nb">
+            <div class="row">命名 <span class="v">dir1_SW…</span></div>
+            <div class="row">格式 <span class="v">SpriteFrames</span></div>
+          </div>
+          <span class="port in act"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT INSPECTOR -->
+    <div class="right">
+      <div class="insp-head">
+        <div class="tt"><span class="d d-violet"></span> 8方向展开</div>
+        <div class="meta">node · fanout8dir · #a3f7</div>
+      </div>
+
+      <div class="insp-sec">
+        <div class="sh">参数</div>
+        <div class="field">
+          <label>方向数</label>
+          <div class="seg"><b>4</b><b class="on">8</b><b>16</b></div>
+        </div>
+        <div class="field">
+          <label>起始方向</label>
+          <div class="inp">dir1 · SW（左下）</div>
+        </div>
+        <div class="field">
+          <label>旋转顺序</label>
+          <div class="seg"><b class="on">顺时针</b><b>逆时针</b></div>
+        </div>
+      </div>
+
+      <div class="insp-sec">
+        <div class="sh">生成提示词（继承）</div>
+        <div class="field">
+          <div class="inp ta">knight walking, {dir} facing, pixel art, 32×32, clean edges, transparent background</div>
+        </div>
+        <div class="field">
+          <label>一致性强度</label>
+          <div class="slider"><div class="fill"></div><div class="knob"></div></div>
+          <div class="row" style="display:flex;justify-content:space-between;font-size:10px;color:var(--txt-3);font-family:var(--fm)"><span>0.0</span><span>0.62</span><span>1.0</span></div>
+        </div>
+      </div>
+
+      <div class="insp-sec">
+        <div class="sh">能力路由</div>
+        <div class="field">
+          <label>img2img →</label>
+          <div class="prov-row"><span class="ld"></span><span class="nm">nanobanana</span><span class="cp">在线</span></div>
+        </div>
+        <div class="field">
+          <label>回退链</label>
+          <div class="inp" style="color:var(--txt-2);font-size:10.5px">seedance → 即梦 → 本地SDXL</div>
+        </div>
+      </div>
+
+      <div class="insp-sec" style="border:none">
+        <div class="sh">血缘</div>
+        <div class="field" style="margin:0">
+          <div class="inp" style="flex-direction:column;align-items:flex-start;gap:6px;color:var(--txt-2);font-size:10.5px;line-height:1.7">
+            <span style="color:var(--acc)">↑ knight_001（原型）</span>
+            <span>↓ 8× generated 帧</span>
+            <span>↓ 8× derived（去背/量化）</span>
+            <span style="color:var(--green)">↓ knight_walk.sheet</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="statusbar">
+    <div class="s"><span class="led" style="background:var(--green);box-shadow:0 0 8px var(--green)"></span> 引擎就绪</div>
+    <div class="s">节点 7</div>
+    <div class="s">缓存命中 142 / 168</div>
+    <div class="s">本地 BiRefNet · GPU MPS</div>
+    <div class="prog">
+      <span>生成中 5/8 方向</span>
+      <div class="bar"><i></i></div>
+      <span>68%</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

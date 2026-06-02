@@ -1,0 +1,35 @@
+# SpriteFlow 示例工作流：多参考图生组图（Seedream 5.0 Lite）
+# 一次出 8 张同角色不同朝向 — 8 方向精灵表的核心生产路径
+# Seedream sequential_image_generation=auto + max_images=8
+
+version: 1
+name: "8方向角色组图（Seedream Sequential）"
+
+nodes:
+  - id: gen_8dir
+    type: SequentialImages
+    params:
+      prompt: |
+        Generate 8 pixel-art frames of the same knight character facing 8 directions
+        in clockwise order: SW, W, NW, N, NE, E, SE, S.
+        Keep identical art style, color palette and proportions across frames.
+        Each frame: isolated subject, transparent-friendly plain background, full body, walking pose.
+      max_images: 8
+      size: "2K"
+      output_format: "png"
+      watermark: false
+      stream: true        # 流式：边出图边收，首图体感更快
+
+  # 注：当前 SaveAsset 仅接单图，先保存第一张作为 smoke test
+  # 后续接入 PackGrid / BBoxAlign 节点后，可把整批 images 串到拼图节点
+  - id: save_first
+    type: SaveAsset
+    inputs:
+      image: gen_8dir.first
+    params:
+      source: generated
+      tags:
+        - "char:knight"
+        - "action:walk"
+        - "dir:multi"
+        - "stage:raw"

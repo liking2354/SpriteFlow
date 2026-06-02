@@ -1,0 +1,242 @@
+{
+  "common": {
+    "appName": "SpriteFlow",
+    "tagline": "2D 游戏素材生产工作流",
+    "run": "运行",
+    "running": "运行中...",
+    "submit": "提交",
+    "cancel": "取消",
+    "confirm": "确定",
+    "save": "保存",
+    "delete": "删除",
+    "refresh": "刷新",
+    "loading": "加载中...",
+    "empty": "暂无数据",
+    "error": "出错了",
+    "success": "成功",
+    "search": "搜索...",
+    "online": "在线",
+    "offline": "离线",
+    "model": "模型",
+    "yes": "是",
+    "no": "否",
+    "copy": "复制",
+    "copied": "已复制",
+    "settings": "设置"
+  },
+  "nav": {
+    "generate": "快捷生图",
+    "workflows": "工作流",
+    "assets": "素材库",
+    "routing": "能力路由",
+    "nodes": "节点库"
+  },
+  "topbar": {
+    "engineOnline": "引擎在线",
+    "engineOffline": "引擎离线",
+    "modelLabel": "模型",
+    "language": "语言",
+    "theme": "主题",
+    "themeDark": "暗色",
+    "themeLight": "亮色",
+    "accentColor": "强调色",
+    "accent": {
+      "blue": "蓝",
+      "violet": "紫",
+      "cyan": "青",
+      "pink": "粉",
+      "amber": "琥珀"
+    }
+  },
+  "size": {
+    "resolution": "分辨率",
+    "ratio": "图片比例",
+    "custom": "图片尺寸",
+    "maxImagesLabel": "生成张数",
+    "maxN": "生成 {{n}} 张"
+  },
+  "ref": {
+    "uploadLocal": "本地上传",
+    "fromLibrary": "素材库选择",
+    "urlPlaceholder": "粘贴图片 URL，回车添加"
+  },
+  "picker": {
+    "title": "选择参考图",
+    "all": "全部",
+    "uploaded": "上传",
+    "generated": "AI 生成",
+    "favorite": "我的收藏"
+  },
+  "tabs": {
+    "creations": "创作记录",
+    "myAssets": "我的资产",
+    "myFavorites": "我的收藏"
+  },
+  "record": {
+    "running": "正在生成…",
+    "runningTitle": "生成任务正在启动中…",
+    "runningHint": "正在分配计算资源中，请稍后",
+    "copyPrompt": "复制提示词",
+    "favorite": "收藏",
+    "unfavorite": "取消收藏",
+    "download": "下载",
+    "useAsRef": "作为参考图",
+    "reuse": "重新编辑",
+    "regenerate": "再次生成",
+    "regenPending": "再次生成中…",
+    "regenFailed": "生成失败",
+    "elapsed": "已用 {{time}}",
+    "duration": "用时 {{time}}"
+  },
+  "preview": {
+    "useAsRef": "用作参考图",
+    "mode": "创作模式",
+    "size": "尺寸大小",
+    "model": "创意模板",
+    "seed": "随机种子",
+    "prompt": "创意提示词",
+    "refs": "参考图",
+    "duration": "生成耗时"
+  },
+  "generate": {
+    "title": "快捷生图",
+    "subtitle": "调用 Seedream 5.0 Lite 的 4 种生图能力",
+    "modes": {
+      "text2img": "文生图",
+      "img2img": "图生图",
+      "multi_fusion": "多图融合",
+      "sequential": "组图生成"
+    },
+    "modeDesc": {
+      "text2img": "纯提示词生成单图",
+      "img2img": "基于 1 张参考图重绘",
+      "multi_fusion": "融合 2+ 张参考图为单图",
+      "sequential": "一次出 N 张相关联的图"
+    },
+    "fields": {
+      "prompt": "提示词",
+      "promptPlaceholder": "结合图片，输入创意描述...",
+      "imageUrls": "参考图",
+      "size": "尺寸",
+      "seed": "随机种子",
+      "seedPlaceholder": "留空为随机",
+      "maxImages": "图片数量",
+      "watermark": "添加水印",
+      "webSearch": "联网搜索增强",
+      "saveAsAsset": "保存到素材库",
+      "tags": "标签",
+      "tagsPlaceholder": "逗号分隔，如 char:knight,style:pixel"
+    },
+    "actions": {
+      "generate": "开始生成",
+      "generating": "生成中...",
+      "stream": "流式生成",
+      "clear": "清空",
+      "clearConfirm": "确定要清空当前输入吗？"
+    },
+    "errors": {
+      "promptRequired": "请输入提示词",
+      "imagesRequired": "{{mode}} 模式需要至少 1 张参考图",
+      "imagesFusionMin": "多图融合至少需要 2 张参考图",
+      "sizeTooSmall": "Seedream 要求图片像素 ≥ 3,686,400（推荐 2K）"
+    },
+    "creationsEmpty": "还没有创作记录，开始生成你的第一张作品吧"
+  },
+  "workflows": {
+    "title": "工作流",
+    "subtitle": "选择 YAML 工作流并执行",
+    "fields": {
+      "yamlPath": "YAML 文件路径",
+      "yamlPathPlaceholder": "如 workflows/example_text2img.yaml"
+    },
+    "samples": "示例工作流",
+    "actions": {
+      "run": "运行工作流"
+    },
+    "result": {
+      "runId": "运行 ID",
+      "status": "状态",
+      "nodes": "节点状态",
+      "cacheHit": "缓存命中",
+      "executed": "已执行",
+      "failed": "失败",
+      "running": "执行中",
+      "pending": "等待中",
+      "completed": "已完成"
+    }
+  },
+  "assets": {
+    "title": "素材库",
+    "subtitle": "所有上传/生成/派生的素材",
+    "filter": {
+      "all": "全部",
+      "uploaded": "上传",
+      "generated": "AI 生成",
+      "derived": "派生",
+      "tags": "标签筛选",
+      "tagsPlaceholder": "逗号分隔"
+    },
+    "upload": {
+      "button": "上传素材",
+      "tags": "标签（可选）",
+      "drag": "拖拽文件到此处或点击选择"
+    },
+    "card": {
+      "openDetail": "查看详情",
+      "copyId": "复制 ID",
+      "delete": "删除"
+    },
+    "detail": {
+      "title": "素材详情",
+      "id": "ID",
+      "type": "类型",
+      "source": "来源",
+      "size": "尺寸",
+      "hash": "哈希",
+      "tags": "标签",
+      "lineage": "血缘",
+      "parent": "上游素材",
+      "children": "下游派生",
+      "provenance": "生成溯源",
+      "createdAt": "创建时间"
+    },
+    "empty": "素材库为空，去生成几张吧",
+    "emptyFavorite": "还没有收藏任何作品，去 ★ 标记几张吧"
+  },
+  "routing": {
+    "title": "能力路由",
+    "subtitle": "Capability → Provider 映射",
+    "currentRoutes": "当前路由",
+    "providers": "已注册 Provider",
+    "capabilities": "支持能力",
+    "capabilityNames": {
+      "text2img": "文生图",
+      "img2img": "图生图",
+      "multi_image_fusion": "多图融合",
+      "sequential_images": "组图生成",
+      "remove_bg": "去背景",
+      "img2video": "图生视频",
+      "extract_frames": "视频抽帧"
+    }
+  },
+  "nodes": {
+    "title": "节点库",
+    "subtitle": "所有可用节点及其 schema",
+    "category": {
+      "generate": "生成",
+      "process": "处理",
+      "pixel": "像素",
+      "flow": "编排",
+      "export": "导出",
+      "uncategorized": "未分类"
+    },
+    "inputs": "输入",
+    "outputs": "输出",
+    "params": "参数"
+  },
+  "status": {
+    "ok": "正常",
+    "error": "异常",
+    "cached": "缓存"
+  }
+}

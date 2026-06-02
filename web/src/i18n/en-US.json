@@ -1,0 +1,240 @@
+{
+  "common": {
+    "appName": "SpriteFlow",
+    "tagline": "2D Game Asset Production Workflow",
+    "run": "Run",
+    "running": "Running...",
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "refresh": "Refresh",
+    "loading": "Loading...",
+    "empty": "No data",
+    "error": "Error",
+    "success": "Success",
+    "search": "Search...",
+    "online": "Online",
+    "offline": "Offline",
+    "model": "Model",
+    "yes": "Yes",
+    "no": "No",
+    "copy": "Copy",
+    "copied": "Copied",
+    "settings": "Settings"
+  },
+  "nav": {
+    "generate": "Generate",
+    "workflows": "Workflows",
+    "assets": "Assets",
+    "routing": "Routing",
+    "nodes": "Nodes"
+  },
+  "topbar": {
+    "engineOnline": "Engine Online",
+    "engineOffline": "Engine Offline",
+    "modelLabel": "Model",
+    "language": "Language",
+    "theme": "Theme",
+    "themeDark": "Dark",
+    "themeLight": "Light",
+    "accentColor": "Accent",
+    "accent": {
+      "blue": "Blue",
+      "violet": "Violet",
+      "cyan": "Cyan",
+      "pink": "Pink",
+      "amber": "Amber"
+    }
+  },
+  "size": {
+    "resolution": "Resolution",
+    "ratio": "Ratio",
+    "custom": "Custom Size",
+    "maxImagesLabel": "Image Count",
+    "maxN": "Generate {{n}}"
+  },
+  "ref": {
+    "uploadLocal": "Upload Local",
+    "fromLibrary": "From Library",
+    "urlPlaceholder": "Paste image URL, press Enter to add"
+  },
+  "picker": {
+    "title": "Pick Reference Image",
+    "all": "All",
+    "uploaded": "Uploaded",
+    "generated": "Generated",
+    "favorite": "Favorites"
+  },
+  "tabs": {
+    "creations": "Creations",
+    "myAssets": "My Assets",
+    "myFavorites": "Favorites"
+  },
+  "record": {
+    "running": "Generating…",
+    "runningTitle": "Task is starting…",
+    "runningHint": "Allocating compute resources, please wait",
+    "copyPrompt": "Copy Prompt",
+    "favorite": "Favorite",
+    "unfavorite": "Unfavorite",
+    "download": "Download",
+    "useAsRef": "Use as Reference",
+    "reuse": "Re-edit",
+    "regenerate": "Regenerate",
+    "regenPending": "Regenerating…",
+    "regenFailed": "Failed",
+    "elapsed": "Elapsed {{time}}",
+    "duration": "Took {{time}}"
+  },
+  "preview": {
+    "useAsRef": "Use as reference",
+    "mode": "Mode",
+    "size": "Size",
+    "model": "Model",
+    "seed": "Seed",
+    "prompt": "Prompt",
+    "refs": "References",
+    "duration": "Duration"
+  },
+  "generate": {
+    "title": "Quick Generate",
+    "subtitle": "Call 4 Seedream 5.0 Lite capabilities",
+    "modes": {
+      "text2img": "Text to Image",
+      "img2img": "Image to Image",
+      "multi_fusion": "Multi Fusion",
+      "sequential": "Sequential"
+    },
+    "modeDesc": {
+      "text2img": "Generate from prompt only",
+      "img2img": "Repaint based on 1 reference",
+      "multi_fusion": "Fuse 2+ references into one image",
+      "sequential": "Generate N coherent images"
+    },
+    "fields": {
+      "prompt": "Prompt",
+      "promptPlaceholder": "Combine images with creative description...",
+      "imageUrls": "Reference Images",
+      "size": "Size",
+      "seed": "Seed",
+      "seedPlaceholder": "Empty for random",
+      "maxImages": "Image Count",
+      "watermark": "Watermark",
+      "webSearch": "Web Search",
+      "saveAsAsset": "Save to Library",
+      "tags": "Tags",
+      "tagsPlaceholder": "comma-separated, e.g. char:knight,style:pixel"
+    },
+    "actions": {
+      "generate": "Generate",
+      "generating": "Generating...",
+      "stream": "Stream",
+      "clear": "Clear",
+      "clearConfirm": "Clear current inputs?"
+    },
+    "errors": {
+      "promptRequired": "Prompt is required",
+      "imagesRequired": "Mode '{{mode}}' requires reference image(s)",
+      "imagesFusionMin": "Multi-fusion needs at least 2 references",
+      "sizeTooSmall": "Seedream requires pixels ≥ 3,686,400"
+    },
+    "creationsEmpty": "No creations yet — generate your first masterpiece"
+  },
+  "workflows": {
+    "title": "Workflows",
+    "subtitle": "Pick a YAML workflow and execute",
+    "fields": {
+      "yamlPath": "YAML File Path",
+      "yamlPathPlaceholder": "e.g. workflows/example_text2img.yaml"
+    },
+    "samples": "Sample Workflows",
+    "actions": { "run": "Run Workflow" },
+    "result": {
+      "runId": "Run ID",
+      "status": "Status",
+      "nodes": "Node Status",
+      "cacheHit": "Cache Hit",
+      "executed": "Executed",
+      "failed": "Failed",
+      "running": "Running",
+      "pending": "Pending",
+      "completed": "Completed"
+    }
+  },
+  "assets": {
+    "title": "Asset Hub",
+    "subtitle": "All uploaded / generated / derived assets",
+    "filter": {
+      "all": "All",
+      "uploaded": "Uploaded",
+      "generated": "AI Generated",
+      "derived": "Derived",
+      "tags": "Filter by Tags",
+      "tagsPlaceholder": "comma-separated"
+    },
+    "upload": {
+      "button": "Upload Asset",
+      "tags": "Tags (optional)",
+      "drag": "Drop file here or click to choose"
+    },
+    "card": {
+      "openDetail": "Detail",
+      "copyId": "Copy ID",
+      "delete": "Delete"
+    },
+    "detail": {
+      "title": "Asset Detail",
+      "id": "ID",
+      "type": "Type",
+      "source": "Source",
+      "size": "Size",
+      "hash": "Hash",
+      "tags": "Tags",
+      "lineage": "Lineage",
+      "parent": "Parent",
+      "children": "Children",
+      "provenance": "Provenance",
+      "createdAt": "Created At"
+    },
+    "empty": "No assets yet",
+    "emptyFavorite": "No favorites yet — tap ★ on any image"
+  },
+  "routing": {
+    "title": "Capability Routing",
+    "subtitle": "Capability → Provider mapping",
+    "currentRoutes": "Current Routes",
+    "providers": "Registered Providers",
+    "capabilities": "Capabilities",
+    "capabilityNames": {
+      "text2img": "Text-to-Image",
+      "img2img": "Image-to-Image",
+      "multi_image_fusion": "Multi Fusion",
+      "sequential_images": "Sequential",
+      "remove_bg": "Remove BG",
+      "img2video": "Image-to-Video",
+      "extract_frames": "Extract Frames"
+    }
+  },
+  "nodes": {
+    "title": "Node Library",
+    "subtitle": "All available nodes and their schemas",
+    "category": {
+      "generate": "Generate",
+      "process": "Process",
+      "pixel": "Pixel",
+      "flow": "Flow",
+      "export": "Export",
+      "uncategorized": "Uncategorized"
+    },
+    "inputs": "Inputs",
+    "outputs": "Outputs",
+    "params": "Params"
+  },
+  "status": {
+    "ok": "OK",
+    "error": "Error",
+    "cached": "Cached"
+  }
+}

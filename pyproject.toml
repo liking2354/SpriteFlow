@@ -1,0 +1,42 @@
+[project]
+name = "spriteflow"
+version = "0.1.0"
+description = "A node-based workflow platform for 2D game asset production"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "cos-python-sdk-v5>=1.9.30",
+    "aiosqlite>=0.20.0",
+    "pillow>=11.0.0",
+    "numpy>=2.1.0",
+    "pyyaml>=6.0.2",
+    "httpx>=0.28.0",
+    "rembg>=2.0.60",
+    "python-dotenv>=1.0.1",
+    "python-multipart>=0.0.9",
+    "sse-starlette>=2.1.0",
+]
+
+[project.scripts]
+spriteflow = "spriteflow.__main__:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "respx>=0.22.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/spriteflow"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

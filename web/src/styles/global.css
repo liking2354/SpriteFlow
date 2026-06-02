@@ -1,0 +1,204 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   SpriteFlow 视觉规范 — 完整 token 系统
+   暗/亮主题 + 5 种强调色（蓝/紫/青/粉/琥珀）
+   ============================================================ */
+
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas,
+    monospace;
+
+  /* 通用功能色 */
+  --cyan: #3ee0d0;
+  --violet: #a571ff;
+  --pink: #ff6ba6;
+  --amber: #ffb648;
+  --green: #56d97a;
+  --red: #ff5b6e;
+}
+
+/* ============== 暗色主题（默认） ============== */
+[data-theme="dark"] {
+  --bg-0: #08090d;
+  --bg-1: #0d0f15;
+  --bg-2: #12151d;
+  --bg-3: #171b25;
+  --line: #222734;
+  --line-soft: #1a1e28;
+  --txt-0: #f2f4f8;
+  --txt-1: #aab2c5;
+  --txt-2: #6c7488;
+  --txt-3: #454c5e;
+  color-scheme: dark;
+}
+
+/* ============== 亮色主题 ============== */
+[data-theme="light"] {
+  --bg-0: #f6f7fb;
+  --bg-1: #ffffff;
+  --bg-2: #f1f3f8;
+  --bg-3: #e7eaf2;
+  --line: #d8dce6;
+  --line-soft: #e5e8f0;
+  --txt-0: #0c1020;
+  --txt-1: #4a5168;
+  --txt-2: #707892;
+  --txt-3: #a1a8bc;
+  color-scheme: light;
+}
+
+/* ============== 强调色 5 选 1 ============== */
+[data-accent="blue"] {
+  --acc: #5b8cff;
+  --acc-hover: #4f7dff;
+  --acc-soft: rgba(91, 140, 255, 0.13);
+  --acc-glow: rgba(91, 140, 255, 0.4);
+}
+[data-accent="violet"] {
+  --acc: #a571ff;
+  --acc-hover: #9760f0;
+  --acc-soft: rgba(165, 113, 255, 0.13);
+  --acc-glow: rgba(165, 113, 255, 0.4);
+}
+[data-accent="cyan"] {
+  --acc: #3ee0d0;
+  --acc-hover: #2dc9b9;
+  --acc-soft: rgba(62, 224, 208, 0.14);
+  --acc-glow: rgba(62, 224, 208, 0.45);
+}
+[data-accent="pink"] {
+  --acc: #ff6ba6;
+  --acc-hover: #f55c98;
+  --acc-soft: rgba(255, 107, 166, 0.14);
+  --acc-glow: rgba(255, 107, 166, 0.4);
+}
+[data-accent="amber"] {
+  --acc: #ffb648;
+  --acc-hover: #f0a838;
+  --acc-soft: rgba(255, 182, 72, 0.14);
+  --acc-glow: rgba(255, 182, 72, 0.4);
+}
+
+/* ============== 基础样式 ============== */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-0);
+  color: var(--txt-0);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: 0.1px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--txt-3);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  color: inherit;
+  background: transparent;
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+}
+
+/* 像素图渲染 */
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+}
+
+/* 动效 */
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.16s ease-out;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line);
+  border-top-color: var(--acc);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* 通用工具样式 */
+.glass {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-2) 85%, transparent),
+    color-mix(in srgb, var(--bg-1) 85%, transparent)
+  );
+  backdrop-filter: blur(8px);
+}
