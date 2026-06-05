@@ -44,6 +44,7 @@ class GenerateRequest(BaseModel):
     watermark: bool = False
     save_as_asset: bool = True
     tags: list[str] = Field(default_factory=list)
+    group_id: str | None = None
 
 
 class GeneratedImage(BaseModel):
@@ -165,7 +166,7 @@ def _build_payload(
     return payload
 
 
-async def _persist_image(image, prompt: str, tags: list[str]) -> dict[str, Any]:
+async def _persist_image(image, prompt: str, tags: list[str], group_id: str | None = None) -> dict[str, Any]:
     storage = get_storage()
     db = get_db()
     pipeline = IngestPipeline(storage, db)
@@ -179,6 +180,7 @@ async def _persist_image(image, prompt: str, tags: list[str]) -> dict[str, Any]:
         filename=f"seedream_{uuid.uuid4().hex[:12]}.png",
         source="generated",
         tags=tags,
+        group_id=group_id,
         provenance={"prompt": prompt, "generated_at": datetime.now().isoformat()},
     )
     presigned = await storage.get_presigned_url(asset.uri, expires=86400)
@@ -272,7 +274,7 @@ async def generate(req: GenerateRequest):
                 tags = list(req.tags) + [f"mode:{req.mode}"]
                 if req.mode == "sequential" and len(images) > 1:
                     tags.append(f"seq:{idx}")
-                info = await _persist_image(img, req.prompt, tags)
+                info = await _persist_image(img, req.prompt, tags, req.group_id)
                 if info.get("asset_id"):
                     asset_ids.append(info["asset_id"])
 
@@ -337,7 +339,7 @@ async def stream_generate_start(req: GenerateRequest):
             if req.save_as_asset:
                 for idx, img in enumerate(images):
                     tags = list(req.tags) + ["mode:sequential", f"seq:{idx}"]
-                    info = await _persist_image(img, req.prompt, tags)
+                    info = await _persist_image(img, req.prompt, tags, req.group_id)
                     persisted.append(info)
                     if info.get("asset_id"):
                         asset_ids.append(info["asset_id"])

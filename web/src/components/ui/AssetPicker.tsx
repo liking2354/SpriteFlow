@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api } from "@/api/client";
@@ -31,9 +32,10 @@ export function AssetPicker({ open, onClose, onPick, multi: _ }: Props) {
 
   if (!open) return null;
 
-  return (
+  // 用 Portal 渲染到 body，避免被父级 overflow/transform 截断
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
@@ -120,6 +122,7 @@ export function AssetPicker({ open, onClose, onPick, multi: _ }: Props) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -15,6 +15,8 @@ class StoragePrefix(str, Enum):
     DERIVED = "derived"
     THUMBNAILS = "thumbnails"
     EXPORTS = "exports"
+    VIDEOS = "videos"
+    AI_PROCESSED = "ai_processed"
 
 
 class StorageBackend(ABC):

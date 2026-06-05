@@ -14,13 +14,17 @@ from fastapi.staticfiles import StaticFiles
 
 from ..config import settings
 from ..asset_hub.db import AssetDB
+from ..asset_hub.ingest import IngestPipeline
 from ..storage.cos_storage import COSStorage
 from ..storage.local_storage import LocalStorage
 from ..providers.seedream import SeedreamProvider
+from ..providers.seedance import SeedanceProvider
 from ..providers.rembg_provider import RembgProvider
+from ..providers.volcengine_image import VolcengineImageProvider
 from ..providers.router import CapabilityRouter
 from ..engine.cache import CacheManager
 from ..engine.executor import Executor
+from ..engine.video_worker import VideoWorker
 from .deps import set_db, set_storage, set_router, set_executor
 
 # 导入节点以触发注册
@@ -32,6 +36,7 @@ from .nodes import router as nodes_router
 from .routing import router as routing_router
 from .generate import router as generate_router
 from .jobs import router as jobs_router
+from .videos import router as videos_router
 
 
 @asynccontextmanager
@@ -64,11 +69,35 @@ async def lifespan(app: FastAPI):
             model=settings.seedream_model,
         )
     )
+    seedance = SeedanceProvider(
+        api_key=settings.ark_api_key,
+        base_url=settings.ark_base_url,
+        model=settings.seedance_model,
+        timeout=settings.seedance_request_timeout,
+    )
+    router.register_provider(seedance)
     router.register_provider(RembgProvider())
+
+    # 注册火山引擎图像处理 Provider
+    volc_provider = VolcengineImageProvider(
+        ak=settings.volc_access_key_id,
+        sk=settings.volc_secret_access_key,
+        mediakit_api_key=settings.volc_mediakit_api_key,
+    )
+    router.register_provider(volc_provider)
+    router.set_credential("volcengine_image", settings.volc_access_key_id)
+    # extra 中存 SK（Credential 只存 api_key 字段）
+    # 通过 set_credential extra 方式存 SK 不方便，改为 provider 直接读 settings
+
     router.set_credential("seedream", settings.ark_api_key)
+    router.set_credential("seedance", settings.ark_api_key)
     set_router(router)
     print(
         f"[SpriteFlow] Seedream 初始化: model={settings.seedream_model}, "
+        f"key_set={'yes' if settings.ark_api_key else 'NO'}"
+    )
+    print(
+        f"[SpriteFlow] Seedance 初始化: model={settings.seedance_model}, "
         f"key_set={'yes' if settings.ark_api_key else 'NO'}"
     )
 
@@ -80,9 +109,20 @@ async def lifespan(app: FastAPI):
     )
     set_executor(executor)
 
+    # 启动视频任务后台 worker（独立 asyncio 任务）
+    ingest = IngestPipeline(storage=storage, db=db)
+    video_worker = VideoWorker(
+        db=db,
+        ingest=ingest,
+        seedance=seedance,
+        api_key=settings.ark_api_key,
+    )
+    video_worker.start()
+
     yield
 
     # 清理
+    await video_worker.stop()
     await db.close()
 
 
@@ -110,6 +150,7 @@ def create_app() -> FastAPI:
     app.include_router(routing_router, prefix="/api", tags=["routing"])
     app.include_router(generate_router, prefix="/api", tags=["generate"])
     app.include_router(jobs_router, prefix="/api", tags=["jobs"])
+    app.include_router(videos_router, prefix="/api", tags=["videos"])
 
     @app.get("/api/health")
     async def health():

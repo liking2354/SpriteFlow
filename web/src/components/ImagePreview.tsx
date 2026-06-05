@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import type { JobItem } from "@/api/types";
@@ -27,6 +29,7 @@ export function ImagePreview({
   onRegenerate,
 }: Props) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [idx, setIdx] = useState(initialIndex);
   const [zoom, setZoom] = useState(1);
@@ -158,7 +161,7 @@ export function ImagePreview({
 
   const cursorClass = zoom > 1 ? (isDragging ? "cursor-grabbing" : "cursor-grab") : "";
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[200] flex bg-black/80 backdrop-blur-md"
       onClick={onClose}
@@ -370,6 +373,19 @@ export function ImagePreview({
               label={t("record.regenerate")}
               onClick={handleRegenerate}
             />
+            <PanelBtn
+              icon={
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4z" />
+                </svg>
+              }
+              label={t("editor.open")}
+              onClick={() => {
+                navigate(`/editor?asset=${encodeURIComponent(cur.id)}`);
+                onClose();
+              }}
+            />
           </div>
 
           <Detail label={t("preview.mode")} value={t(`generate.modes.${job.mode}`, { defaultValue: job.mode })} />
@@ -407,7 +423,8 @@ export function ImagePreview({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -15,9 +15,17 @@ class Capability(str, Enum):
     IMG2IMG = "img2img"
     MULTI_IMAGE_FUSION = "multi_image_fusion"
     SEQUENTIAL_IMAGES = "sequential_images"
+    TEXT2VIDEO = "text2video"
     IMG2VIDEO = "img2video"
     REMOVE_BG = "remove_bg"
     EXTRACT_FRAMES = "extract_frames"
+    # 火山引擎 AI MediaKit 图像处理能力
+    ENHANCE_PHOTO = "enhance_photo"       # 图像画质增强
+    IMAGE_INPAINT = "image_inpaint"         # 图像擦除修复
+    IMAGE_OUTPAINT = "image_outpaint"       # 智能扩图
+    IMAGE_CUT = "image_cut"                 # 图像智能裁剪
+    SLIM_IMAGE = "slim_image"               # 集智瘦身
+    RESIZE_IMAGE = "resize_image"            # 图像缩放
 
 
 @dataclass

@@ -16,29 +16,41 @@ export function TopBar() {
   const online = !!data && !isError && data.ark_configured;
 
   return (
-    <header className="h-[52px] px-5 flex items-center gap-5 border-b border-line"
-      style={{ background: "linear-gradient(180deg, var(--bg-2), var(--bg-1))" }}
+    <header
+      className="relative h-[52px] px-5 flex items-center gap-5 border-b border-line glass-strong"
+      style={{
+        background:
+          "linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 100%)",
+      }}
     >
-      <Link to="/" className="flex items-center gap-2.5 font-semibold text-[15px] text-txt-0">
-        <div
-          className="relative w-[26px] h-[26px] rounded-s"
-          style={{
-            background: "linear-gradient(135deg, var(--acc), var(--violet))",
-            boxShadow: "0 0 16px var(--acc-glow)",
-          }}
-        >
+      {/* 顶部 1px 渐变光线 */}
+      <div
+        className="absolute bottom-0 left-0 right-0 h-px pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, rgba(var(--acc-rgb), 0.45) 30%, rgba(var(--acc-rgb), 0.45) 70%, transparent)",
+          opacity: 0.7,
+        }}
+      />
+
+      <Link to="/" className="flex items-center gap-3 font-semibold text-[15px] text-txt-0 group">
+        <div className="tech-mark group-hover:scale-[1.03] transition-transform" />
+        <div className="flex items-baseline gap-1.5 leading-none">
+          <span className="font-semibold tracking-[0.5px]">SpriteFlow</span>
           <span
-            className="absolute inset-[7px] rounded-[3px]"
-            style={{ background: "var(--bg-1)" }}
-          />
+            className="text-[10px] text-txt-3 font-mono uppercase tracking-[1px]"
+            style={{ letterSpacing: "1.2px" }}
+          >
+            v0.1
+          </span>
         </div>
-        SpriteFlow
-        <span className="text-[11px] text-txt-2 font-normal ml-1">v0.1</span>
       </Link>
 
       {data && (
-        <div className="flex items-center gap-2 text-[11.5px] text-txt-2 font-mono">
-          <span>{t("topbar.modelLabel")}</span>
+        <div className="hidden md:flex items-center gap-2 text-[11px] text-txt-2 font-mono pl-4 border-l border-[var(--line-soft)]">
+          <span className="text-txt-3 uppercase tracking-[1.2px] text-[10px]">
+            {t("topbar.modelLabel")}
+          </span>
           <span className="text-txt-1">{data.model}</span>
         </div>
       )}

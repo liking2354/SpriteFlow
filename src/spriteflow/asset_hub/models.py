@@ -14,7 +14,7 @@ class Asset(BaseModel):
 
     id: str = Field(default_factory=lambda: datetime.now().strftime("%Y%m%d%H%M%S%f"))
     type: Literal["image", "video", "spritesheet"] = "image"
-    source: Literal["uploaded", "generated", "derived"] = "uploaded"
+    source: Literal["uploaded", "generated", "derived", "ai_processed"] = "uploaded"
     uri: str = ""                     # COS 对象路径
     hash: str = ""                    # 内容哈希（去重 + 缓存寻址）
     width: int | None = None
@@ -22,8 +22,18 @@ class Asset(BaseModel):
     thumbnail: str | None = None      # 缩略图 URI
     tags: list[str] = Field(default_factory=list)
     parent_id: str | None = None      # 血缘：上游素材 id
+    group_id: str | None = None       # 归属分组
     provenance: dict | None = None    # 生成它的工作流 id + 参数快照
     favorite: bool = False             # 是否收藏
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class AssetGroup(BaseModel):
+    """素材分组 / 项目"""
+
+    id: str = Field(default_factory=lambda: f"grp_{uuid.uuid4().hex[:12]}")
+    name: str
+    description: str = ""
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -69,6 +79,7 @@ CREATE TABLE IF NOT EXISTS assets (
     parent_id   TEXT REFERENCES assets(id),
     provenance  TEXT,
     favorite    INTEGER NOT NULL DEFAULT 0,
+    group_id    TEXT,
     created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_assets_hash ON assets(hash);
@@ -107,4 +118,12 @@ CREATE TABLE IF NOT EXISTS generation_jobs (
 CREATE INDEX IF NOT EXISTS idx_jobs_created ON generation_jobs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_favorite ON generation_jobs(favorite);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON generation_jobs(status);
+
+-- 素材分组（项目）
+CREATE TABLE IF NOT EXISTS asset_groups (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    created_at  TEXT NOT NULL
+);
 """

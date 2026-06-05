@@ -162,9 +162,7 @@ class SeedreamProvider(Provider):
                 json=body,
             )
             if resp.status_code >= 400:
-                raise RuntimeError(
-                    f"Seedream API 错误 {resp.status_code}: {resp.text}"
-                )
+                raise self._parse_error(resp)
             data = resp.json()
 
         items = data.get("data", []) or []
@@ -207,9 +205,7 @@ class SeedreamProvider(Provider):
             ) as resp:
                 if resp.status_code >= 400:
                     text = await resp.aread()
-                    raise RuntimeError(
-                        f"Seedream 流式错误 {resp.status_code}: {text.decode(errors='ignore')}"
-                    )
+                    raise self._parse_error_stream(resp.status_code, text.decode(errors='ignore'))
 
                 async for evt in self._iter_sse(resp):
                     etype = evt.get("type", "")
@@ -265,6 +261,54 @@ class SeedreamProvider(Provider):
 
     # ----------------------------- 工具方法 -----------------------------
 
+    @staticmethod
+    def _parse_error(resp: httpx.Response) -> RuntimeError:
+        """解析 API 错误响应，返回带友好提示的 RuntimeError。"""
+        try:
+            data = resp.json()
+            err = data.get("error", {})
+            code = err.get("code", "")
+            msg = err.get("message", "")
+        except Exception:
+            code = ""
+            msg = resp.text
+        return SeedreamProvider._make_error(resp.status_code, code, msg, resp.text)
+
+    @staticmethod
+    def _parse_error_stream(status_code: int, text: str) -> RuntimeError:
+        """解析流式 API 错误响应。"""
+        try:
+            data = json.loads(text)
+            err = data.get("error", {})
+            code = err.get("code", "")
+            msg = err.get("message", "")
+        except Exception:
+            code = ""
+            msg = text
+        return SeedreamProvider._make_error(status_code, code, msg, text)
+
+    @staticmethod
+    def _make_error(status_code: int, code: str, msg: str, fallback_text: str) -> RuntimeError:
+        """根据错误码生成友好的 RuntimeError。"""
+        # 内容安全检测错误
+        if code == "InputImageSensitiveContentDetected":
+            return RuntimeError(
+                "参考图被内容安全系统拦截（InputImageSensitiveContentDetected）。"
+                "请尝试：1) 更换参考图；2) 避免上传含敏感信息的图片；3) 使用文生图模式。"
+            )
+        if code == "OutputImageSensitiveContentDetected":
+            return RuntimeError(
+                "生成结果触发内容安全过滤（OutputImageSensitiveContentDetected）。"
+                "请尝试修改提示词，避免生成敏感内容。"
+            )
+        if code == "PromptSensitiveContentDetected":
+            return RuntimeError(
+                "提示词触发内容安全过滤（PromptSensitiveContentDetected）。"
+                "请修改提示词，避免使用敏感描述。"
+            )
+
+        return RuntimeError(f"Seedream API 错误 {status_code}: {msg or fallback_text}")
+
     def _auth_headers(self, api_key: str) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {api_key}",
@@ -300,23 +344,64 @@ class SeedreamProvider(Provider):
     async def _materialize(
         urls: list[str], b64s: list[str]
     ) -> list[Image.Image]:
-        """把 URL/base64 → PIL.Image 列表（并发下载）"""
+        """把 URL/base64 → PIL.Image 列表
+
+        URL 下载策略：
+          - 单 URL 串行重试 3 次（间隔 1s/3s，覆盖瞬时网络抖动）
+          - 单图超时 60s（足够 1080p 大图）
+          - 失败时打印完整 traceback + 友好 RuntimeError
+        """
+        import logging
+        import traceback
+
+        logger = logging.getLogger("spriteflow.seedream")
+
         images: list[Image.Image] = []
 
         for b in b64s:
             raw = base64.b64decode(b)
             images.append(Image.open(io.BytesIO(raw)).convert("RGBA"))
 
-        if urls:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                results = await asyncio.gather(
-                    *(client.get(u) for u in urls), return_exceptions=True
-                )
-                for r in results:
-                    if isinstance(r, Exception):
-                        raise RuntimeError(f"下载 Seedream 输出图片失败: {r}")
-                    r.raise_for_status()
-                    images.append(Image.open(io.BytesIO(r.content)).convert("RGBA"))
+        if not urls:
+            return images
+
+        # 串行下载（多图共用一个 client，重试每张图独立）
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            for idx, u in enumerate(urls):
+                last_err: Exception | None = None
+                for attempt in range(3):
+                    try:
+                        resp = await client.get(u)
+                        resp.raise_for_status()
+                        images.append(
+                            Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                        )
+                        last_err = None
+                        break
+                    except Exception as e:
+                        last_err = e
+                        logger.warning(
+                            "[seedream] 下载第 %d 张图第 %d 次尝试失败: %s: %r  url=%s",
+                            idx + 1,
+                            attempt + 1,
+                            type(e).__name__,
+                            e,
+                            u[:120],
+                        )
+                        if attempt < 2:
+                            await asyncio.sleep(1 if attempt == 0 else 3)
+
+                if last_err is not None:
+                    # 完整 traceback 打到 stdout，方便排查
+                    traceback.print_exception(
+                        type(last_err), last_err, last_err.__traceback__
+                    )
+                    cls = type(last_err).__name__
+                    msg = str(last_err) or repr(last_err)
+                    raise RuntimeError(
+                        f"下载 Seedream 第 {idx + 1}/{len(urls)} 张输出图失败 "
+                        f"({cls}): {msg}"
+                    )
 
         return images
 

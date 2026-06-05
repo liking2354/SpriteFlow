@@ -49,6 +49,7 @@ class IngestPipeline:
         source: str = "uploaded",
         tags: list[str] | None = None,
         parent_id: str | None = None,
+        group_id: str | None = None,
         provenance: dict | None = None,
     ) -> Asset:
         """执行上传流水线
@@ -59,6 +60,7 @@ class IngestPipeline:
             source: 来源类型 uploaded/generated/derived
             tags: 标签列表
             parent_id: 上游素材 id（血缘）
+            group_id: 归属分组 id
             provenance: 生成溯源信息
 
         Returns:
@@ -113,8 +115,102 @@ class IngestPipeline:
             thumbnail=thumbnail_uri,
             tags=tags or [],
             parent_id=parent_id,
+            group_id=group_id,
             provenance=provenance,
         )
 
+        await self.db.create_asset(asset)
+        return asset
+
+    async def replace(
+        self,
+        asset_id: str,
+        data: bytes,
+    ) -> Asset:
+        """覆盖原素材内容（保留 id / parent_id / tags / favorite）。
+
+        流程：校验 → 规格化 → 重新计算 hash → 缩略图 → 上传 COS → UPDATE 元数据
+        """
+        existing = await self.db.get_asset(asset_id)
+        if not existing:
+            raise ValueError(f"素材不存在: {asset_id}")
+
+        # 1. 解码 + 规格化
+        image = Image.open(io.BytesIO(data))
+        image = normalize_image(image)
+        width, height = image.size
+
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        normalized_data = buf.getvalue()
+        content_hash = compute_content_hash(normalized_data)
+
+        # 2. 缩略图
+        thumb = generate_thumbnail(image)
+        thumb_buf = io.BytesIO()
+        thumb.save(thumb_buf, format="PNG")
+        thumb_data = thumb_buf.getvalue()
+
+        # 3. 上传到 COS（按当前 source 决定 prefix；复用 hash 命名让相同内容自然去重）
+        storage_prefix = StoragePrefix(existing.source)
+        file_key = f"{content_hash}.png"
+        uri = await self.storage.upload(file_key, normalized_data, prefix=storage_prefix)
+        thumbnail_uri = await self.storage.upload(
+            file_key, thumb_data, prefix=StoragePrefix.THUMBNAILS
+        )
+
+        # 4. 更新元数据
+        await self.db.replace_asset_content(
+            asset_id,
+            uri=uri,
+            hash_=content_hash,
+            width=width,
+            height=height,
+            thumbnail=thumbnail_uri,
+        )
+
+        # 5. 返回最新 Asset
+        updated = await self.db.get_asset(asset_id)
+        assert updated is not None
+        return updated
+
+    async def ingest_video(
+        self,
+        data: bytes,
+        *,
+        ext: str = "mp4",
+        content_type: str = "video/mp4",
+        tags: list[str] | None = None,
+        parent_id: str | None = None,
+        group_id: str | None = None,
+        provenance: dict | None = None,
+    ) -> Asset:
+        """把视频字节直接落库到 COS videos/ 目录，并写一条 type=video 的 Asset。
+
+        视频不做规格化、不生成缩略图（前端用 <video poster> 或首帧异步生成）。
+        """
+        content_hash = compute_content_hash(data)
+        existing = await self.db.get_asset_by_hash(content_hash)
+        if existing:
+            return existing
+
+        file_key = f"{content_hash}.{ext}"
+        uri = await self.storage.upload(
+            file_key, data, prefix=StoragePrefix.VIDEOS, content_type=content_type
+        )
+
+        asset = Asset(
+            type="video",
+            source="generated",
+            uri=uri,
+            hash=content_hash,
+            width=None,
+            height=None,
+            thumbnail=None,
+            tags=tags or [],
+            parent_id=parent_id,
+            group_id=group_id,
+            provenance=provenance,
+        )
         await self.db.create_asset(asset)
         return asset

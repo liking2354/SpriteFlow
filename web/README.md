@@ -28,10 +28,16 @@ python3 -m spriteflow serve
 # 终端 2：启动前端
 cd web
 pnpm install        # 或 npm install
+pnpm fetch:imgly    # 首次：下载素材编辑器抠图模型（约 76MB → web/public/imgly/）
 pnpm dev            # 访问 http://localhost:5173
 ```
 
 Vite 代理已配置 `/api` → `http://127.0.0.1:8000`，无需关心跨域。
+
+> `pnpm fetch:imgly` 把 `@imgly/background-removal` 的 ONNX 模型与 WASM
+> 预下载到本地 `public/imgly/`，让"一键抠图"完全离线运行。
+> 该目录已在 `.gitignore`，不会进仓库。升级 `@imgly/background-removal`
+> 后重跑此命令即可。
 
 ### 生产模式（同端口）
 

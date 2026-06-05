@@ -20,6 +20,9 @@ web/dist/
 *.log
 .vite/
 
+# imgly background-removal 模型（部署时跑 `pnpm fetch:imgly` 下载）
+web/public/imgly/
+
 # OS
 .DS_Store
 Thumbs.db

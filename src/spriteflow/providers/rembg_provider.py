@@ -28,9 +28,18 @@ class RembgProvider(Provider):
         if cap != Capability.REMOVE_BG:
             raise ValueError(f"RembgProvider 不支持能力: {cap}")
 
+        import io
+
         image = payload.get("image")
+
+        # 兼容字节流：传入 image_bytes 也能工作
         if image is None:
-            raise ValueError("payload 缺少 'image' 字段")
+            image_bytes = payload.get("image_bytes")
+            if image_bytes is not None:
+                image = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
+
+        if image is None:
+            raise ValueError("payload 缺少 'image' 或 'image_bytes' 字段")
 
         if not isinstance(image, Image.Image):
             raise ValueError(f"'image' 必须是 PIL.Image，实际类型: {type(image)}")

@@ -31,6 +31,15 @@ class AppSettings(BaseSettings):
     ark_api_key: str = ""
     ark_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
     seedream_model: str = "doubao-seedream-5-0-260128"
+    # 火山方舟 Seedance（视频生成，复用 ark_api_key 与 base_url）
+    seedance_model: str = "doubao-seedance-2-0-260128"
+    seedance_poll_interval_sec: float = 5.0
+    seedance_request_timeout: float = 60.0
+
+    # 火山引擎 AI MediaKit（图像处理）
+    volc_access_key_id: str = ""
+    volc_secret_access_key: str = ""
+    volc_mediakit_api_key: str = ""  # Bearer Token for slim-image / resize-image
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 

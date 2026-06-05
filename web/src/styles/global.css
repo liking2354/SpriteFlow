@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ============================================================
-   SpriteFlow 视觉规范 — 完整 token 系统
+   SpriteFlow 视觉规范 — 现代科技风增强版
    暗/亮主题 + 5 种强调色（蓝/紫/青/粉/琥珀）
    ============================================================ */
 
@@ -21,35 +21,50 @@
   --amber: #ffb648;
   --green: #56d97a;
   --red: #ff5b6e;
+
+  /* 鼠标位置（AppShell 通过 JS 注入） */
+  --mx: 50%;
+  --my: 30%;
 }
 
 /* ============== 暗色主题（默认） ============== */
 [data-theme="dark"] {
-  --bg-0: #08090d;
-  --bg-1: #0d0f15;
-  --bg-2: #12151d;
-  --bg-3: #171b25;
-  --line: #222734;
-  --line-soft: #1a1e28;
+  --bg-0: #06070b;
+  --bg-1: #0c0e15;
+  --bg-2: #11141d;
+  --bg-3: #161a25;
+  --line: #1f2433;
+  --line-soft: #161a26;
   --txt-0: #f2f4f8;
   --txt-1: #aab2c5;
   --txt-2: #6c7488;
   --txt-3: #454c5e;
+  /* 玻璃 */
+  --glass-bg: rgba(20, 24, 35, 0.55);
+  --glass-bg-strong: rgba(20, 24, 35, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-ring: rgba(255, 255, 255, 0.04);
+  --grid-line: rgba(255, 255, 255, 0.04);
   color-scheme: dark;
 }
 
 /* ============== 亮色主题 ============== */
 [data-theme="light"] {
-  --bg-0: #f6f7fb;
+  --bg-0: #f3f5fa;
   --bg-1: #ffffff;
-  --bg-2: #f1f3f8;
-  --bg-3: #e7eaf2;
+  --bg-2: #f6f8fc;
+  --bg-3: #e9eef6;
   --line: #d8dce6;
   --line-soft: #e5e8f0;
   --txt-0: #0c1020;
   --txt-1: #4a5168;
   --txt-2: #707892;
   --txt-3: #a1a8bc;
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-bg-strong: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --glass-ring: rgba(0, 0, 0, 0.04);
+  --grid-line: rgba(0, 0, 0, 0.04);
   color-scheme: light;
 }
 
@@ -59,30 +74,35 @@
   --acc-hover: #4f7dff;
   --acc-soft: rgba(91, 140, 255, 0.13);
   --acc-glow: rgba(91, 140, 255, 0.4);
+  --acc-rgb: 91, 140, 255;
 }
 [data-accent="violet"] {
   --acc: #a571ff;
   --acc-hover: #9760f0;
   --acc-soft: rgba(165, 113, 255, 0.13);
   --acc-glow: rgba(165, 113, 255, 0.4);
+  --acc-rgb: 165, 113, 255;
 }
 [data-accent="cyan"] {
   --acc: #3ee0d0;
   --acc-hover: #2dc9b9;
   --acc-soft: rgba(62, 224, 208, 0.14);
   --acc-glow: rgba(62, 224, 208, 0.45);
+  --acc-rgb: 62, 224, 208;
 }
 [data-accent="pink"] {
   --acc: #ff6ba6;
   --acc-hover: #f55c98;
   --acc-soft: rgba(255, 107, 166, 0.14);
   --acc-glow: rgba(255, 107, 166, 0.4);
+  --acc-rgb: 255, 107, 166;
 }
 [data-accent="amber"] {
   --acc: #ffb648;
   --acc-hover: #f0a838;
   --acc-soft: rgba(255, 182, 72, 0.14);
   --acc-glow: rgba(255, 182, 72, 0.4);
+  --acc-rgb: 255, 182, 72;
 }
 
 /* ============== 基础样式 ============== */
@@ -148,41 +168,44 @@ textarea:focus {
   image-rendering: -moz-crisp-edges;
 }
 
-/* 动效 */
+/* ============== 动效 ============== */
 @keyframes pulse-glow {
-  0%,
-  100% {
-    opacity: 0.85;
-  }
-  50% {
-    opacity: 1;
-  }
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
+  to { transform: rotate(360deg); }
 }
 
 @keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.animate-fade-in {
-  animation: fade-in 0.16s ease-out;
+@keyframes shimmer-line {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
+
+@keyframes aurora-drift {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  50%  { transform: translate(40px, -20px) rotate(8deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes aurora-drift-2 {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  50%  { transform: translate(-30px, 25px) rotate(-6deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes border-rotate {
+  to { --angle: 360deg; }
+}
+
+.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+.animate-fade-in { animation: fade-in 0.16s ease-out; }
 
 .spinner {
   width: 14px;
@@ -193,12 +216,358 @@ textarea:focus {
   animation: spin 0.8s linear infinite;
 }
 
-/* 通用工具样式 */
+/* ============== 玻璃态（升级） ============== */
 .glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow:
+    inset 0 0 0 1px var(--glass-ring),
+    0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+}
+
+/* ============== 现代科技风：增强 utility ============== */
+
+/* 顶部高光线（Card 顶端的 1px 渐变高光） */
+.tech-top-line {
+  position: relative;
+}
+.tech-top-line::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 12%;
+  right: 12%;
+  height: 1px;
   background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg-2) 85%, transparent),
-    color-mix(in srgb, var(--bg-1) 85%, transparent)
+    90deg,
+    transparent,
+    rgba(var(--acc-rgb), 0.55),
+    transparent
   );
-  backdrop-filter: blur(8px);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* 极光辉光（用作背景装饰） */
+.aurora-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+
+/* 网格背景（赛博点阵） */
+.tech-grid-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+  mask-image: radial-gradient(
+    circle at var(--mx) var(--my),
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.6) 30%,
+    rgba(0, 0, 0, 0) 75%
+  );
+  -webkit-mask-image: radial-gradient(
+    circle at var(--mx) var(--my),
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.6) 30%,
+    rgba(0, 0, 0, 0) 75%
+  );
+}
+
+/* 跟随鼠标的高光（容器 hover 时使用） */
+.tech-spotlight {
+  position: relative;
+  isolation: isolate;
+}
+.tech-spotlight::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    320px circle at var(--spot-x, 50%) var(--spot-y, 0%),
+    rgba(var(--acc-rgb), 0.12),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+.tech-spotlight:hover::after {
+  opacity: 1;
+}
+
+/* "扫光"效果（用于按钮 / chip hover） */
+.tech-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.tech-shimmer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 45%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.08) 55%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  transition: transform 0.8s ease;
+  pointer-events: none;
+}
+.tech-shimmer:hover::before {
+  animation: shimmer-line 1.1s ease-out;
+}
+
+/* 渐变描边（hover 时浮现的彩色边框） */
+.tech-ring-hover {
+  position: relative;
+}
+.tech-ring-hover::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(var(--acc-rgb), 0.6),
+    rgba(165, 113, 255, 0.25) 50%,
+    rgba(62, 224, 208, 0.5)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.tech-ring-hover:hover::before {
+  opacity: 1;
+}
+
+/* 主按钮：能量光晕（覆盖 Button primary） */
+.tech-energy-btn {
+  position: relative;
+}
+.tech-energy-btn::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(var(--acc-rgb), 0.55),
+    rgba(165, 113, 255, 0.35),
+    rgba(62, 224, 208, 0.45)
+  );
+  filter: blur(12px);
+  opacity: 0.5;
+  z-index: -1;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.tech-energy-btn:hover::after {
+  opacity: 0.85;
+}
+
+/* Logo 标记 */
+.tech-mark {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--acc), var(--violet));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset,
+    0 0 18px var(--acc-glow),
+    0 4px 12px rgba(0, 0, 0, 0.5);
+}
+.tech-mark::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--cyan), transparent 60%);
+  opacity: 0.5;
+}
+.tech-mark::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border-radius: 3px;
+  background: var(--bg-0);
+  box-shadow: 0 0 10px var(--acc-glow) inset;
+}
+
+/* 状态指示器条（顶栏右下/状态栏） */
+.tech-status-bar {
+  position: relative;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(var(--acc-rgb), 0.6) 50%,
+    transparent 100%
+  );
+  opacity: 0.6;
+}
+
+/* 聚焦光环（input/textarea 选中态） */
+.tech-focus-ring:focus-within {
+  border-color: var(--acc) !important;
+  box-shadow:
+    0 0 0 3px var(--acc-soft),
+    0 0 24px rgba(var(--acc-rgb), 0.15);
+}
+
+/* 等宽数字 chip（小尺寸标签） */
+.tech-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.3px;
+  background: var(--bg-3);
+  color: var(--txt-2);
+  border: 1px solid var(--line-soft);
+}
+.tech-chip-acc {
+  background: var(--acc-soft);
+  color: var(--acc);
+  border-color: rgba(var(--acc-rgb), 0.25);
+}
+
+/* 渐变分隔线 */
+.tech-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--line) 30%,
+    var(--line) 70%,
+    transparent
+  );
+}
+
+/* ============================================================
+   filerobot-image-editor 暗色补丁
+   ------------------------------------------------------------
+   filerobot 内部的 @scaleflex/ui Input/Modal 组件硬编码 lightPalette，
+   不读传入的 theme，这里用类名选择器全局覆盖。
+   类名规则：Sfx<Component>-<Sub>（来自 @scaleflex/ui）
+   ============================================================ */
+
+/* —— 输入框：背景 + 文字 + placeholder —— */
+[class*="SfxInput-Container"] {
+  background-color: #161b24 !important;
+  border-color: #262d3d !important;
+  color: #e8ecf4 !important;
+}
+[class*="SfxInput-Container"]:hover {
+  background-color: #1c2230 !important;
+  border-color: #3a4258 !important;
+}
+[class*="SfxInput-Container"]:focus-within {
+  background-color: #1c2230 !important;
+  border-color: #5b8cff !important;
+}
+[class*="SfxInput-Base"],
+[class*="SfxInput-Base"] input,
+input[class*="SfxInput-Base"] {
+  color: #e8ecf4 !important;
+  background-color: transparent !important;
+}
+[class*="SfxInput"] input::placeholder {
+  color: #6b7388 !important;
+}
+
+/* —— 数字输入框右侧增减箭头（webkit） —— */
+[class*="SfxInput"] input[type="number"]::-webkit-inner-spin-button,
+[class*="SfxInput"] input[type="number"]::-webkit-outer-spin-button {
+  filter: invert(0.85);
+}
+
+/* —— Modal / Dialog（另存为弹窗等） —— */
+[class*="SfxModal-Paper"],
+[class*="SfxDialog-Paper"],
+[class*="SfxPopper-Paper"] {
+  background-color: #0e1116 !important;
+  color: #e8ecf4 !important;
+  border: 1px solid #262d3d !important;
+}
+[class*="SfxModal-Backdrop"],
+[class*="SfxDialog-Backdrop"] {
+  background-color: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* —— Select / Menu / Dropdown 列表 —— */
+[class*="SfxMenu-List"],
+[class*="SfxMenuItem"],
+[class*="SfxSelect-OptionList"],
+[class*="SfxSelect-Option"] {
+  background-color: #161b24 !important;
+  color: #e8ecf4 !important;
+}
+[class*="SfxMenuItem"]:hover,
+[class*="SfxSelect-Option"]:hover {
+  background-color: #1c2230 !important;
+}
+
+/* —— Label / Caption（输入框上方 "宽度 / 高度" 这类标签） —— */
+[class*="SfxLabel"],
+[class*="SfxCaption"],
+[class*="SfxFormControl-Label"] {
+  color: #a8b1c4 !important;
+}
+
+/* —— FilerobotImageEditor 文件名/格式表单内的标题 —— */
+[class*="FIE_save-as-modal"] [class*="SfxLabel"],
+[class*="FIE_resize-tool"] [class*="SfxLabel"] {
+  color: #a8b1c4 !important;
+}
+
+/* —— 导出弹窗里的 quality slider / 锁链按钮 —— */
+[class*="FIE_save-as-modal"] [class*="SfxButton"][class*="link"] {
+  color: #5b8cff !important;
+}
+
+/* —— 画布棋盘格背景：让透明 PNG 的透明区可视化 —— */
+[class*="FIE_canvas-container"] {
+  background-color: #1c2230 !important;
+  /* 经典棋盘格：两个反向 45° 渐变拼出方格 */
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.04) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.04) 75%) !important;
+  background-size: 24px 24px !important;
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0px !important;
 }

@@ -7,9 +7,17 @@ routes:
   multi_image_fusion: seedream
   sequential_images: seedream
   remove_bg: rembg
+  enhance_photo: volcengine_image
+  image_inpaint: volcengine_image
+  image_cut: volcengine_image
+  image_outpaint: volcengine_image
+  slim_image: volcengine_image
+  resize_image: volcengine_image
 
-# 主 provider 失败时的回退链（可补充其他兼容 provider）
-fallback: {}
+# 主 provider 失败时的回退链
+fallback:
+  remove_bg:
+    - volcengine_image
 
 # 各 provider 的凭证配置（建议走环境变量）
 credentials:

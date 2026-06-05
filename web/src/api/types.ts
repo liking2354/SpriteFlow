@@ -20,6 +20,7 @@ export interface GenerateRequest {
   watermark?: boolean;
   save_as_asset?: boolean;
   tags?: string[];
+  group_id?: string | null;
 }
 
 export interface GeneratedImage {
@@ -46,7 +47,7 @@ export interface GenerateResponse {
 export interface AssetItem {
   id: string;
   type: string;
-  source: "uploaded" | "generated" | "derived";
+  source: "uploaded" | "generated" | "derived" | "ai_processed";
   uri: string;
   hash: string;
   width?: number;
@@ -54,14 +55,26 @@ export interface AssetItem {
   thumbnail?: string | null;
   tags: string[];
   parent_id?: string | null;
+  group_id?: string | null;
   provenance?: Record<string, unknown> | null;
   favorite?: boolean;
+  created_at: string;
+}
+
+export interface AssetGroup {
+  id: string;
+  name: string;
+  description: string;
   created_at: string;
 }
 
 export interface AssetListResponse {
   items: AssetItem[];
   total: number;
+}
+
+export interface GroupListResponse {
+  items: AssetGroup[];
 }
 
 /** 创作任务（持久化记录） */
@@ -179,4 +192,68 @@ export interface StreamEvent {
   message?: string;
   run_id?: string;
   job_id?: string;
+}
+
+// ============================ 视频生成 ============================
+
+export type VideoMode =
+  | "text2video"
+  | "image2video_first"
+  | "first_last"
+  | "multi_ref";
+
+export type VideoStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "expired";
+
+export interface VideoCreateInput {
+  mode: VideoMode;
+  prompt: string;
+  first_frame_asset_id?: string | null;
+  last_frame_asset_id?: string | null;
+  ref_asset_ids?: string[];
+  model?: string | null;
+  ratio?: string | null;
+  resolution?: string | null;
+  duration?: number | null;
+  seed?: number | null;
+  camerafixed?: boolean | null;
+  watermark?: boolean | null;
+  return_last_frame?: boolean | null;
+  generate_audio?: boolean | null;
+  execution_expires_after?: number | null;
+}
+
+export interface VideoTaskItem {
+  id: string;
+  provider: string;
+  provider_task_id: string | null;
+  model: string;
+  mode: VideoMode;
+  prompt: string;
+  params: Record<string, unknown>;
+  status: VideoStatus;
+  error: string | null;
+  result_asset: AssetItem | null;
+  last_frame_asset: AssetItem | null;
+  inputs: {
+    first_frame_asset_id?: string | null;
+    last_frame_asset_id?: string | null;
+    ref_asset_ids?: string[];
+  };
+  usage_tokens: number | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface VideoListResponse {
+  items: VideoTaskItem[];
+  total: number;
+  limit: number;
+  offset: number;
 }

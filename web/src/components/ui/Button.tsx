@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 type Variant = "primary" | "ghost" | "outline";
-type Size = "sm" | "md";
+type Size = "xs" | "sm" | "md";
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
@@ -11,6 +11,7 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const sizeMap: Record<Size, string> = {
+  xs: "h-6 px-2 text-[10px] gap-1 rounded-sm",
   sm: "h-7 px-3 text-[11px] gap-1.5",
   md: "h-9 px-4 text-[12px] gap-2",
 };
@@ -26,20 +27,24 @@ export function Button({
   ...rest
 }: Props) {
   const base =
-    "inline-flex items-center justify-center rounded-s font-semibold transition-all duration-150 select-none";
+    "relative inline-flex items-center justify-center rounded-s font-semibold transition-all duration-150 select-none";
 
   const variantCls: Record<Variant, string> = {
     primary:
-      "text-white border-0 shadow-[0_4px_16px_var(--acc-glow)] hover:-translate-y-px hover:shadow-[0_6px_22px_var(--acc-glow)] disabled:opacity-50 disabled:translate-y-0",
-    ghost:
-      "bg-transparent text-txt-1 hover:bg-bg-3 hover:text-txt-0",
+      "tech-energy-btn tech-shimmer text-white border-0 hover:-translate-y-px disabled:opacity-50 disabled:translate-y-0 disabled:saturate-50",
+    ghost: "bg-transparent text-txt-1 hover:bg-bg-3 hover:text-txt-0",
     outline:
-      "bg-bg-3 text-txt-1 border border-line hover:border-[#2f3647] hover:text-txt-0",
+      "bg-bg-3 text-txt-1 border border-line hover:border-[#2f3647] hover:text-txt-0 tech-shimmer",
   };
 
   const styleByVariant =
     variant === "primary"
-      ? { background: "linear-gradient(135deg, var(--acc), var(--acc-hover))" }
+      ? {
+          background:
+            "linear-gradient(135deg, var(--acc), var(--acc-hover))",
+          boxShadow:
+            "0 4px 16px var(--acc-glow), inset 0 1px 0 rgba(255,255,255,0.15)",
+        }
       : undefined;
 
   return (
@@ -50,7 +55,7 @@ export function Button({
       style={styleByVariant}
     >
       {loading ? <span className="spinner" /> : iconLeft}
-      {children}
+      <span className="relative z-[1]">{children}</span>
     </button>
   );
 }
