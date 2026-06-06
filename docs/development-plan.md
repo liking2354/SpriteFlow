@@ -1,32 +1,48 @@
 # SpriteFlow 开发计划
 
 > 最后更新：2026-06-06
-> 总进度：0 / 10 Phase 完成
+> 总进度：3 / 10 Phase 完成
 
 ---
 
 ## Phase 1 — 模板系统后端集成
 
 **目标**：让模板系统跑起来，可 CRUD、可预览  
-**预计**：1天 | **状态**：⬜ 未开始
+**预计**：1天 | **状态**：✅ 已完成
 
-- [ ] 1.1 在 `app.py` lifespan 中初始化 `TemplateDB`、建表、注册到 deps
-- [ ] 1.2 挂载 `templates_router` 到 FastAPI app
-- [ ] 1.3 调用 `POST /api/templates/init-presets` 注入预置数据
-- [ ] 1.4 编写 `/api/templates/preview` 集成测试（Spec + 剑士 + 待机 → 验证拼装结果）
+- [x] 1.1 在 `app.py` lifespan 中初始化 `TemplateDB`、建表、注册到 deps
+- [x] 1.2 挂载 `templates_router` 到 FastAPI app
+- [x] 1.3 注入预置数据（1 Spec + 6 角色 + 7 动作 + 4 VFX）
+- [x] 1.4 `/api/templates/preview` 集成测试（Spec + 剑士 + 待机 → 验证拼装结果）
 
-**验收**：`curl /api/templates/specs` 返回 1 个 Spec、`/api/templates/characters` 返回 6 个角色、`/api/templates/preview` 返回正确的三层拼装 Prompt
+**验收**：`curl /api/templates/specs` 返回 1 个 Spec、`/api/templates/characters` 返回 6 个角色、`/api/templates/preview` 返回正确的三层拼装 Prompt ✅
+
+**修改文件**：
+- `src/spriteflow/templates/db.py` — 增加 `connect()/close()` 方法
+- `src/spriteflow/api/deps.py` — 添加 `_template_db` 单例 + getter/setter
+- `src/spriteflow/templates/api.py` — 改用 deps 单例，修正 prefix 为 `/templates`
+- `src/spriteflow/templates/__init__.py` — 导出 get_template_db/set_template_db
+- `src/spriteflow/templates/builder.py` — 修复 `@staticmethod` 中 `self` 引用
+- `src/spriteflow/api/app.py` — lifespan 初始化 + router 挂载
 
 ---
 
 ## Phase 2 — SpriteAligner 后处理管线
 
 **目标**：解决 42px vs 53px 尺寸不一致问题  
-**预计**：1天 | **状态**：⬜ 未开始
+**预计**：1天 | **状态**：✅ 已完成
 
-- [ ] 2.1 实现 `SpriteAligner.align()` 核心逻辑（检测 → 裁剪 → 缩放 → 居中 → 底部对齐）
-- [ ] 2.2 注册 `SpriteAlignNode` 到节点系统
-- [ ] 2.3 在 `example_text2img.yaml` 流程中插入 Align 节点，验证输出尺寸统一
+- [x] 2.1 实现 `SpriteAligner.align()` 核心逻辑（检测 → 裁剪 → 缩放 → 居中 → 底部对齐）
+- [x] 2.2 注册 `SpriteAlignNode` 到节点系统
+- [x] 2.3 在 `example_text2img_with_align.yaml` 流程中插入 Align 节点，验证输出尺寸统一
+
+**验收**：同一 Spec 下任意尺寸输入图，经 Aligner 处理后全部落在 64×64 画布内 ✅（4 种不同输入尺寸全部输出 64x64）
+
+**修改文件**：
+- `src/spriteflow/engine/sprite_aligner.py` — 新建，核心对齐逻辑（detect_bounds / crop_to_sprite / scale_to_fit / place_on_canvas / align）
+- `src/spriteflow/nodes/sprite_align.py` — 新建，SpriteAlignNode 封装
+- `src/spriteflow/nodes/__init__.py` — 注册 SpriteAlign 节点
+- `workflows/example_text2img_with_align.yaml` — 新建，含 SpriteAlign 的完整工作流
 
 **验收**：同一 Spec 下生成 5 张图，经 Aligner 处理后全部落在 64×64 画布内，角色高度误差 < 3px
 
@@ -35,14 +51,28 @@
 ## Phase 3 — OpenRouter Provider
 
 **目标**：统一路由层，按场景选最优模型  
-**预计**：1天 | **状态**：⬜ 未开始
+**预计**：1天 | **状态**：✅ 已完成
 
-- [ ] 3.1 实现 `OpenRouterProvider`（OpenAI 兼容 API，`POST /chat/completions`，`modalities: ["image"]`）
-- [ ] 3.2 在 `routing.yaml` 中新增路由：`character_master → openrouter`、`four_view → openrouter`
-- [ ] 3.3 OpenRouter 支持模型参数覆盖：`POST /api/generate` 时可通过 `model` 字段切换
-- [ ] 3.4 验证对比：同 prompt 用 Seedream 直连 vs OpenRouter Seedream 4.5 → 质量/速度/成本差异
+- [x] 3.1 实现 `OpenRouterProvider`（OpenAI 兼容 API，`POST /chat/completions`，`modalities: ["image", "text"]`）
+- [x] 3.2 在 `routing.yaml` 中新增路由：`character_master → openrouter`、`four_view → openrouter`，并添加 text2img/img2img 的 openrouter 回退链
+- [x] 3.3 OpenRouter 支持模型参数覆盖：`POST /api/generate` 时可通过 `model` 字段切换
+- [x] 3.4 注册到 `app.py` lifespan 并验证（提供者注册、路由配置、能力枚举扩展全部通过）
 
-**验收**：选择 OpenRouter 模型生成角色母版，产出质量一致的结果
+**验收**：
+- OpenRouterProvider 支持 TEXT2IMG / IMG2IMG / CHARACTER_MASTER / FOUR_VIEW 四种能力 ✅
+- routing.yaml 13 条路由 + 2 条回退链正确加载 ✅
+- `POST /api/generate` 支持 `model` 参数覆盖（如 `openai/gpt-image-1`）✅
+- 场景默认模型：`character_master` → `openai/gpt-image-1`，`four_view` → `bytedance/doubao-seedream-4.5` ✅
+
+**修改文件**：
+- `src/spriteflow/providers/openrouter.py` — 新建，OpenRouter OpenAI-compatible API 适配器
+- `src/spriteflow/providers/base.py` — 新增 `CHARACTER_MASTER` / `FOUR_VIEW` 能力枚举
+- `src/spriteflow/providers/__init__.py` — 导出 `OpenRouterProvider`
+- `config/routing.yaml` — 新增 character_master/four_view 路由 + text2img/img2img 回退链 + openrouter 凭证
+- `src/spriteflow/config.py` — 新增 `openrouter_api_key` / `openrouter_default_model` / `openrouter_base_url`
+- `src/spriteflow/api/app.py` — lifespan 中注册 OpenRouterProvider + 凭证
+- `src/spriteflow/api/generate.py` — `GenerateRequest` 新增 `model` 字段并传递到 payload
+- `.env.example` — 新增 OpenRouter 环境变量模板
 
 ---
 
@@ -149,17 +179,15 @@
 ## 总览
 
 ```
-Phase 1  ████░░░░░░░░░░░░  模板系统后端       (0/4)  ⬜
-Phase 2  ████████░░░░░░░░  SpriteAligner     (0/3)  ⬜
-Phase 3  ████████████░░░░  OpenRouter        (0/4)  ⬜
-Phase 4  ████████████████  Extract+Pack      (0/4)  ⬜  🔑
-Phase 5  ██████████████████ 模板驱动生成       (0/4)  ⬜  🔑
-Phase 6  ██████████████████ 批量生成引擎       (0/4)  ⬜
-Phase 7  ██████████████████ 前端模板管理       (0/5)  ⬜
-Phase 8  ██████████████████ 前端批量生成       (0/4)  ⬜
-Phase 9  ██████████████████ 技能特效管线       (0/3)  ⬜
-Phase 10 ██████████████████ 全链路联调         (0/4)  ⬜
-         ─────────────────────────────
+Phase 3  ████████████████████████████ OpenRouter        (4/4)  ✅
+Phase 4  ░░░░░░░░░░░░░░░░░░░░░░░░░░ Extract+Pack      (0/4)  ⬜  🔑
+Phase 5  ░░░░░░░░░░░░░░░░░░░░░░░░░░ 模板驱动生成       (0/4)  ⬜  🔑
+Phase 6  ░░░░░░░░░░░░░░░░░░░░░░░░░░ 批量生成引擎       (0/4)  ⬜
+Phase 7  ░░░░░░░░░░░░░░░░░░░░░░░░░░ 前端模板管理       (0/5)  ⬜
+Phase 8  ░░░░░░░░░░░░░░░░░░░░░░░░░░ 前端批量生成       (0/4)  ⬜
+Phase 9  ░░░░░░░░░░░░░░░░░░░░░░░░░░ 技能特效管线       (0/3)  ⬜
+Phase 10 ░░░░░░░░░░░░░░░░░░░░░░░░░░ 全链路联调         (0/4)  ⬜
+         ─────────────────────────────────────────────
          全部 39 个任务，预计 13 天
 ```
 

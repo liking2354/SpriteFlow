@@ -19,22 +19,9 @@ from .models import (
 )
 from .db import TemplateDB
 from .builder import PromptBuilder
+from ..api.deps import get_template_db, set_template_db  # noqa: F401 — 导入即注册
 
-# 模板数据库通过 deps 注入
-_template_db: TemplateDB | None = None
-
-router = APIRouter(prefix="/api/templates", tags=["templates"])
-
-
-def set_template_db(db: TemplateDB) -> None:
-    global _template_db
-    _template_db = db
-
-
-def get_template_db() -> TemplateDB:
-    if _template_db is None:
-        raise RuntimeError("模板数据库未初始化")
-    return _template_db
+router = APIRouter(prefix="/templates", tags=["templates"])
 
 
 # ============================ SpriteSpec ============================

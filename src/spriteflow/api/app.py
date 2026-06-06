@@ -21,11 +21,14 @@ from ..providers.seedream import SeedreamProvider
 from ..providers.seedance import SeedanceProvider
 from ..providers.rembg_provider import RembgProvider
 from ..providers.volcengine_image import VolcengineImageProvider
+from ..providers.openrouter import OpenRouterProvider
 from ..providers.router import CapabilityRouter
 from ..engine.cache import CacheManager
 from ..engine.executor import Executor
 from ..engine.video_worker import VideoWorker
-from .deps import set_db, set_storage, set_router, set_executor
+from ..templates.db import TemplateDB
+from ..templates.builder import PromptBuilder
+from .deps import set_db, set_storage, set_router, set_executor, set_template_db
 
 # 导入节点以触发注册
 from ..nodes import *  # noqa: F401, F403
@@ -37,6 +40,7 @@ from .routing import router as routing_router
 from .generate import router as generate_router
 from .jobs import router as jobs_router
 from .videos import router as videos_router
+from ..templates.api import router as templates_router
 
 
 @asynccontextmanager
@@ -89,6 +93,15 @@ async def lifespan(app: FastAPI):
     # extra 中存 SK（Credential 只存 api_key 字段）
     # 通过 set_credential extra 方式存 SK 不方便，改为 provider 直接读 settings
 
+    # 注册 OpenRouter Provider（多模型统一入口）
+    openrouter = OpenRouterProvider(
+        api_key=settings.openrouter_api_key,
+        base_url=settings.openrouter_base_url,
+        model=settings.openrouter_default_model,
+    )
+    router.register_provider(openrouter)
+    router.set_credential("openrouter", settings.openrouter_api_key)
+
     router.set_credential("seedream", settings.ark_api_key)
     router.set_credential("seedance", settings.ark_api_key)
     set_router(router)
@@ -100,6 +113,10 @@ async def lifespan(app: FastAPI):
         f"[SpriteFlow] Seedance 初始化: model={settings.seedance_model}, "
         f"key_set={'yes' if settings.ark_api_key else 'NO'}"
     )
+    print(
+        f"[SpriteFlow] OpenRouter 初始化: model={settings.openrouter_default_model}, "
+        f"key_set={'yes' if settings.openrouter_api_key else 'NO'}"
+    )
 
     # 初始化执行器
     executor = Executor(
@@ -108,6 +125,32 @@ async def lifespan(app: FastAPI):
         storage=storage,
     )
     set_executor(executor)
+
+    # 初始化模板数据库
+    template_db = TemplateDB()
+    await template_db.connect()
+    await template_db.init_tables()
+    set_template_db(template_db)
+    print("[SpriteFlow] 模板数据库初始化成功")
+
+    # 注入预置模板数据（仅首次）
+    existing = await template_db.list_specs()
+    if not existing:
+        spec = PromptBuilder.build_default_spec()
+        for layer in spec.layers:
+            await template_db.create_layer(layer)
+            for block in layer.blocks:
+                await template_db.create_block(block, layer.id)
+        await template_db.create_spec(spec)
+
+        for c in PromptBuilder.build_default_characters():
+            await template_db.create_character(c)
+        for a in PromptBuilder.build_default_actions():
+            await template_db.create_action(a)
+        for v in PromptBuilder.build_default_vfx():
+            await template_db.create_vfx(v)
+
+        print("[SpriteFlow] 预置模板数据注入完成: 1 Spec + 6 角色 + 7 动作 + 4 VFX")
 
     # 启动视频任务后台 worker（独立 asyncio 任务）
     ingest = IngestPipeline(storage=storage, db=db)
@@ -124,6 +167,7 @@ async def lifespan(app: FastAPI):
     # 清理
     await video_worker.stop()
     await db.close()
+    await template_db.close()
 
 
 def create_app() -> FastAPI:
@@ -151,6 +195,7 @@ def create_app() -> FastAPI:
     app.include_router(generate_router, prefix="/api", tags=["generate"])
     app.include_router(jobs_router, prefix="/api", tags=["jobs"])
     app.include_router(videos_router, prefix="/api", tags=["videos"])
+    app.include_router(templates_router, prefix="/api", tags=["templates"])
 
     @app.get("/api/health")
     async def health():

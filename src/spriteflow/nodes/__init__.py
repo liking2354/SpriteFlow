@@ -8,6 +8,7 @@ from .multi_image_fusion import MultiImageFusionNode
 from .sequential_images import SequentialImagesNode
 from .remove_bg import RemoveBGNode
 from .save_asset import SaveAssetNode
+from .sprite_align import SpriteAlignNode
 
 # 注册所有核心节点
 register_node("LoadAsset", LoadAssetNode)
@@ -16,6 +17,7 @@ register_node("Img2Img", Img2ImgNode)
 register_node("MultiImageFusion", MultiImageFusionNode)
 register_node("SequentialImages", SequentialImagesNode)
 register_node("RemoveBG", RemoveBGNode)
+register_node("SpriteAlign", SpriteAlignNode)
 register_node("SaveAsset", SaveAssetNode)
 
 __all__ = [
@@ -25,5 +27,6 @@ __all__ = [
     "MultiImageFusionNode",
     "SequentialImagesNode",
     "RemoveBGNode",
+    "SpriteAlignNode",
     "SaveAssetNode",
 ]

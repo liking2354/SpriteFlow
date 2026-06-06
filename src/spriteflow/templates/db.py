@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 import aiosqlite
 
+from ..config import settings
 from .models import (
     PromptLayer, PromptBlock, CharacterTemplate, ActionTemplate,
     VFXTemplate, SpriteSpec, StagePipeline, StageDef, CanvasSpec, AlignRule,
@@ -138,14 +140,29 @@ CREATE INDEX IF NOT EXISTS idx_vt_key ON vfx_templates(key);
 # ============================ 数据库操作 ============================
 
 class TemplateDB:
-    """模板系统数据库操作"""
+    """模板系统数据库操作 — 与 AssetDB 共享同一个 SQLite 文件"""
 
-    def __init__(self, conn: aiosqlite.Connection):
-        self._conn = conn
+    def __init__(self, db_path: Path | str | None = None) -> None:
+        self._db_path = Path(db_path) if db_path else settings.database_path
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn: aiosqlite.Connection | None = None
+
+    async def connect(self) -> None:
+        self._conn = await aiosqlite.connect(str(self._db_path))
+        self._conn.row_factory = aiosqlite.Row
+        await self._conn.execute("PRAGMA foreign_keys = ON")
+
+    async def close(self) -> None:
+        if self._conn:
+            await self._conn.close()
+            self._conn = None
 
     # ---- Init ----
 
     async def init_tables(self) -> None:
+        if not self._conn:
+            await self.connect()
+        assert self._conn is not None
         await self._conn.executescript(TEMPLATE_SCHEMA_DDL)
         await self._conn.commit()
 

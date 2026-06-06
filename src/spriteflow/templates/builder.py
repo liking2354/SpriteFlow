@@ -176,7 +176,7 @@ class PromptBuilder:
                 enabled=True,
                 created_at=now, updated_at=now,
             )],
-            sort_order=self._category_order(LayerCategory.CHARACTER),
+            sort_order=PromptBuilder._category_order(LayerCategory.CHARACTER),
             enabled=True,
             created_at=now, updated_at=now,
         )
@@ -205,7 +205,7 @@ class PromptBuilder:
                 enabled=True,
                 created_at=now, updated_at=now,
             )],
-            sort_order=self._category_order(LayerCategory.ACTION),
+            sort_order=PromptBuilder._category_order(LayerCategory.ACTION),
             enabled=True,
             created_at=now, updated_at=now,
         )

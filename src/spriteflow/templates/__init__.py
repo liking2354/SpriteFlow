@@ -9,7 +9,8 @@ from .models import (
 )
 from .db import TemplateDB, TEMPLATE_SCHEMA_DDL
 from .builder import PromptBuilder
-from .api import router as templates_router, set_template_db
+from .api import router as templates_router
+from ..api.deps import get_template_db, set_template_db
 
 __all__ = [
     "SpriteSpec", "PromptLayer", "PromptBlock", "BlockCategory", "LayerCategory",
@@ -19,5 +20,5 @@ __all__ = [
     "BatchGenerateRequest", "BatchGenerateResponse",
     "TemplateDB", "TEMPLATE_SCHEMA_DDL",
     "PromptBuilder",
-    "templates_router", "set_template_db",
+    "templates_router", "get_template_db", "set_template_db",
 ]

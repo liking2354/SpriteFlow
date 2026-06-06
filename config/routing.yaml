@@ -13,12 +13,20 @@ routes:
   image_outpaint: volcengine_image
   slim_image: volcengine_image
   resize_image: volcengine_image
+  # OpenRouter 场景路由：按场景选择最优模型
+  character_master: openrouter
+  four_view: openrouter
 
 # 主 provider 失败时的回退链
 fallback:
   remove_bg:
     - volcengine_image
+  text2img:
+    - openrouter
+  img2img:
+    - openrouter
 
 # 各 provider 的凭证配置（建议走环境变量）
 credentials:
   seedream: ${ARK_API_KEY}
+  openrouter: ${OPENROUTER_API_KEY}

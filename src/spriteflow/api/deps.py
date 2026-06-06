@@ -8,6 +8,7 @@ from ..asset_hub.db import AssetDB
 from ..storage.base import StorageBackend
 from ..providers.router import CapabilityRouter
 from ..engine.executor import Executor
+from ..templates.db import TemplateDB
 
 # ---- 全局单例（由 app.py lifespan 初始化） ----
 
@@ -15,6 +16,7 @@ _db: AssetDB | None = None
 _storage: StorageBackend | None = None
 _router: CapabilityRouter | None = None
 _executor: Executor | None = None
+_template_db: TemplateDB | None = None
 
 
 def get_db() -> AssetDB:
@@ -55,3 +57,13 @@ def set_router(router: CapabilityRouter) -> None:
 def set_executor(executor: Executor) -> None:
     global _executor
     _executor = executor
+
+
+def get_template_db() -> TemplateDB:
+    assert _template_db is not None, "模板数据库未初始化"
+    return _template_db
+
+
+def set_template_db(db: TemplateDB) -> None:
+    global _template_db
+    _template_db = db

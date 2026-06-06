@@ -36,6 +36,11 @@ class AppSettings(BaseSettings):
     seedance_poll_interval_sec: float = 5.0
     seedance_request_timeout: float = 60.0
 
+    # OpenRouter 多模型统一入口
+    openrouter_api_key: str = ""
+    openrouter_default_model: str = "openai/gpt-image-1"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+
     # 火山引擎 AI MediaKit（图像处理）
     volc_access_key_id: str = ""
     volc_secret_access_key: str = ""

@@ -42,6 +42,7 @@ class GenerateRequest(BaseModel):
     max_images: int = Field(1, ge=1, le=15)
     web_search: bool = False
     watermark: bool = False
+    model: str | None = Field(None, description="覆盖默认模型（如 openai/gpt-image-1）")
     save_as_asset: bool = True
     tags: list[str] = Field(default_factory=list)
     group_id: str | None = None
@@ -146,6 +147,8 @@ def _build_payload(
         "response_format": "url",
         "web_search": req.web_search,
     }
+    if req.model:
+        payload["model"] = req.model
     if cap == Capability.IMG2IMG:
         if not refs:
             raise HTTPException(400, "img2img 需要至少 1 张参考图")

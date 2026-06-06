@@ -19,6 +19,9 @@ class Capability(str, Enum):
     IMG2VIDEO = "img2video"
     REMOVE_BG = "remove_bg"
     EXTRACT_FRAMES = "extract_frames"
+    # 场景路由：按语义场景选择最优模型（通过 OpenRouter）
+    CHARACTER_MASTER = "character_master"       # 角色母版生成 → GPT Image2
+    FOUR_VIEW = "four_view"                     # 四视图生成 → Seedream 4.5
     # 火山引擎 AI MediaKit 图像处理能力
     ENHANCE_PHOTO = "enhance_photo"       # 图像画质增强
     IMAGE_INPAINT = "image_inpaint"         # 图像擦除修复
