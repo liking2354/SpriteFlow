@@ -62,12 +62,14 @@ class Executor:
         cache: CacheManager | None = None,
         router: Any = None,
         storage: Any = None,
+        db: Any = None,
         timeout: float = 120.0,
         max_retries: int = 2,
     ) -> None:
         self.cache = cache or CacheManager()
         self.router = router
         self.storage = storage
+        self.db = db
         self.timeout = timeout
         self.max_retries = max_retries
 
@@ -84,6 +86,7 @@ class Executor:
             cache=self.cache,
             router=self.router,
             storage=self.storage,
+            db=self.db,
             run_id=run.run_id,
         )
 

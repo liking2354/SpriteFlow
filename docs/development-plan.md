@@ -1,7 +1,7 @@
 # SpriteFlow 开发计划
 
 > 最后更新：2026-06-06
-> 总进度：3 / 10 Phase 完成
+> 总进度：4 / 10 Phase 完成
 
 ---
 
@@ -81,14 +81,25 @@
 > 🔑 **关键里程碑**：首次打通"视频 → 精灵表"完整链路
 
 **目标**：视频生成 → 精灵帧 → 精灵表 完整链路  
-**预计**：2天 | **状态**：⬜ 未开始
+**预计**：2天 | **状态**：✅ 已完成
 
-- [ ] 4.1 实现 `ExtractFramesNode`（视频 → ffmpeg 抽帧 → 逐帧 rembg → SpriteAligner）
-- [ ] 4.2 实现 `PackSpritesheetNode`（帧列表 → 拼合大图 + atlas JSON，支持 Godot/Unity/Phaser 格式）
-- [ ] 4.3 编写验证工作流：`生成走路视频 → 抽帧 → 对齐 → 拼合 → 导出`
-- [ ] 4.4 前端 AssetPreviewModal 中增加帧序列播放功能（canvas 逐帧循环）
+- [x] 4.1 实现 `ExtractFramesNode`（视频 → ffmpeg 抽帧 → 逐帧 rembg → SpriteAligner）
+- [x] 4.2 实现 `PackSpritesheetNode`（帧列表 → 拼合大图 + atlas JSON，支持 Godot/Unity/Phaser 格式）
+- [x] 4.3 编写验证工作流：`生成走路视频 → 抽帧 → 对齐 → 拼合 → 导出`
+- [x] 4.4 前端 AssetPreviewModal 中增加帧序列播放功能（canvas 逐帧循环）
 
 **验收**：一张 128×128 角色走路精灵表 + atlas.json，导入 Godot 能直接创建 AnimatedSprite
+
+**修改文件**：
+- `src/spriteflow/engine/context.py` — 添加 `db` 字段（Context 运行时注入）
+- `src/spriteflow/engine/executor.py` — 构造函数接收 `db`，注入 Context
+- `src/spriteflow/api/app.py` — 传递 `db` 给 Executor，修复 LoadAsset/SaveAsset 的 `hasattr(ctx, 'db')` 路径
+- `src/spriteflow/nodes/extract_frames.py` — 新建，ExtractFramesNode（ffmpeg 抽帧 + rembg + SpriteAligner）
+- `src/spriteflow/nodes/pack_spritesheet.py` — 新建，PackSpritesheetNode（拼合 + atlas JSON + COS 导出）
+- `src/spriteflow/nodes/__init__.py` — 注册 ExtractFrames / PackSpritesheet 节点
+- `workflows/example_video_to_spritesheet.yaml` — 新建，端到端验证工作流
+- `tests/test_extract_pack.py` — 新建，合成视频端到端测试
+- `web/src/components/AssetPreviewModal.tsx` — 新增 canvas 帧序列播放器（SpritesheetPlayer）
 
 ---
 
@@ -180,7 +191,7 @@
 
 ```
 Phase 3  ████████████████████████████ OpenRouter        (4/4)  ✅
-Phase 4  ░░░░░░░░░░░░░░░░░░░░░░░░░░ Extract+Pack      (0/4)  ⬜  🔑
+Phase 4  ████████████████████████████ Extract+Pack      (4/4)  ✅  🔑
 Phase 5  ░░░░░░░░░░░░░░░░░░░░░░░░░░ 模板驱动生成       (0/4)  ⬜  🔑
 Phase 6  ░░░░░░░░░░░░░░░░░░░░░░░░░░ 批量生成引擎       (0/4)  ⬜
 Phase 7  ░░░░░░░░░░░░░░░░░░░░░░░░░░ 前端模板管理       (0/5)  ⬜

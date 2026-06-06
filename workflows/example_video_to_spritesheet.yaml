@@ -1,0 +1,53 @@
+# SpriteFlow 验证工作流：视频 → 精灵表 完整链路
+# 
+# 前置条件：
+#   1. 通过 POST /api/videos/tasks 创建并完成一个 Seedance 视频任务
+#   2. 将返回的 video_asset_id 填入下方 video_asset_id 参数
+#
+# 链路：视频资产 → ffmpeg 抽帧 → rembg → SpriteAligner → 拼合精灵表 → 入库
+
+version: 1
+name: "视频走路由 → 精灵表（完整链路验证）"
+
+nodes:
+  - id: extract_frames
+    type: ExtractFrames
+    params:
+      video_asset_id: "VIDEO_ASSET_ID_PLACEHOLDER"
+      fps: 8
+      max_frames: 16
+      canvas_width: 64
+      canvas_height: 64
+      align_target_width: 28
+      align_target_height: 48
+      align_threshold: 32
+      padding: 8
+      remove_bg: "true"
+      align: "true"
+
+  - id: pack
+    type: PackSpritesheet
+    inputs:
+      frames: extract_frames.frames
+    params:
+      columns: 4
+      cell_width: 64
+      cell_height: 64
+      padding: 2
+      format: godot
+      save_asset: "true"
+      name: "character_walk"
+      tags:
+        - "type:spritesheet"
+        - "format:godot"
+        - "stage:walk"
+
+  - id: save
+    type: SaveAsset
+    inputs:
+      image: pack.spritesheet
+    params:
+      source: generated
+      tags:
+        - "type:spritesheet"
+        - "export:godot"

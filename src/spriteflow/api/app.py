@@ -123,6 +123,7 @@ async def lifespan(app: FastAPI):
         cache=CacheManager(),
         router=router,
         storage=storage,
+        db=db,
     )
     set_executor(executor)
 
