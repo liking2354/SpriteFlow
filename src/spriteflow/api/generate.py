@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any, AsyncIterator
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sse_starlette.sse import EventSourceResponse
 
 from ..asset_hub.models import GenerationJob
@@ -29,10 +29,19 @@ router = APIRouter()
 
 
 class GenerateRequest(BaseModel):
-    """统一的快捷生图请求"""
+    """统一的快捷生图请求
+
+    支持两种模式：
+    1. 手写 prompt：直接提供 prompt 字段
+    2. 模板驱动：提供 spec_id + character_template_id + action_template_id，
+       PromptBuilder 自动拼装 prompt（此时手写 prompt 被忽略）
+    """
 
     mode: str = Field(..., description="text2img | img2img | multi_fusion | sequential")
-    prompt: str = Field(..., description="提示词")
+    prompt: str = Field("", description="提示词（模板模式下自动拼装，手写时必填）")
+    spec_id: str | None = Field(None, description="规格书 ID，提供后自动拼装 prompt")
+    character_template_id: str | None = Field(None, description="角色模板 ID")
+    action_template_id: str | None = Field(None, description="动作模板 ID，提供后 stage 标签为 action.key")
     image_urls: list[str] = Field(default_factory=list)
     ref_asset_ids: list[str] = Field(default_factory=list, description="素材库内参考图 id")
     size: str = Field("2K", description="2K / 4K / 自定义如 2048x2048 / adaptive")
@@ -46,6 +55,12 @@ class GenerateRequest(BaseModel):
     save_as_asset: bool = True
     tags: list[str] = Field(default_factory=list)
     group_id: str | None = None
+
+    @model_validator(mode="after")
+    def _check_prompt_or_spec(self):
+        if not self.prompt and not self.spec_id:
+            raise ValueError("必须提供 prompt 或 spec_id 至少一项")
+        return self
 
 
 class GeneratedImage(BaseModel):
@@ -214,11 +229,102 @@ def _make_job_record(req: GenerateRequest) -> GenerationJob:
             "web_search": req.web_search,
             "watermark": req.watermark,
             "tags": req.tags,
+            "spec_id": req.spec_id,
+            "character_template_id": req.character_template_id,
+            "action_template_id": req.action_template_id,
         },
         ref_image_urls=req.image_urls or [],
         ref_asset_ids=req.ref_asset_ids or [],
         status="running",
     )
+
+
+# ============================ 模板解析 ============================
+
+
+def _build_template_tags(meta: dict) -> list[str]:
+    """从模板元数据构建标签列表：spec:{key}, char:{key}, stage:{key|master}"""
+    tags: list[str] = []
+    if meta.get("spec_key"):
+        tags.append(f"spec:{meta['spec_key']}")
+    if meta.get("char_key"):
+        tags.append(f"char:{meta['char_key']}")
+    if meta.get("stage_key"):
+        tags.append(f"stage:{meta['stage_key']}")
+    elif meta.get("char_key"):
+        # 有角色但无动作 → 母版阶段
+        tags.append("stage:master")
+    return tags
+
+
+async def _resolve_template_prompt(req: GenerateRequest) -> tuple[str | None, dict]:
+    """解析模板参数，调用 PromptBuilder 拼装 prompt
+
+    Returns:
+        (effective_prompt, template_meta)
+        - 若未提供 spec_id，返回 (None, {}) 表示使用手写 prompt
+        - template_meta 携带 spec_key/char_key/stage_key 等元数据用于标签
+    """
+    if not req.spec_id:
+        return None, {}
+
+    # 懒加载模板依赖（避免循环导入）
+    from .deps import get_template_db  # noqa: E402
+    from ..templates.builder import PromptBuilder  # noqa: E402
+    from ..templates.models import PromptAssembly  # noqa: E402
+
+    try:
+        tdb = get_template_db()
+        builder = PromptBuilder(tdb)
+
+        assembly_req = PromptAssembly(
+            spec_id=req.spec_id,
+            character_template_id=req.character_template_id or "",
+            action_template_id=req.action_template_id or "",
+        )
+        result = await builder.assemble(assembly_req)
+
+        meta: dict = {
+            "char_name": result.character_name,
+            "action_name": result.action_name,
+        }
+
+        # 从 spec 获取 key（slugified name）
+        spec = await tdb.get_spec(req.spec_id)
+        if spec is None:
+            raise HTTPException(400, f"规格书不存在: {req.spec_id}")
+        meta["spec_key"] = spec.name.lower().replace(" ", "_").replace("-", "_")
+        meta["spec_name"] = spec.name
+
+        # 从 character 获取 key
+        if req.character_template_id:
+            char = await tdb.get_character(req.character_template_id)
+            if char is None:
+                raise HTTPException(400, f"角色模板不存在: {req.character_template_id}")
+            meta["char_key"] = char.key
+            meta["char_name"] = meta.get("char_name") or char.name
+
+        # 从 action 获取 key
+        if req.action_template_id:
+            action = await tdb.get_action(req.action_template_id)
+            if action is None:
+                raise HTTPException(400, f"动作模板不存在: {req.action_template_id}")
+            meta["stage_key"] = action.key
+            meta["action_name"] = meta.get("action_name") or action.name
+        elif req.character_template_id:
+            # 仅有角色无动作 → master 阶段
+            meta["stage_key"] = "master"
+
+        # 若 spec 有 default_group_id 且 req 未指定 group_id，自动推断
+        if spec.default_group_id and not req.group_id:
+            meta["auto_group_id"] = spec.default_group_id
+
+        return result.final_prompt, meta
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"模板拼装失败: {e}")
 
 
 # ============================ 端点 ============================
@@ -254,10 +360,16 @@ async def generate(req: GenerateRequest):
     # 后台异步执行
     async def _runner() -> None:
         try:
+            # 模板解析：拼装 prompt + 构建标签元数据
+            template_prompt, template_meta = await _resolve_template_prompt(req)
+            effective_prompt = template_prompt or req.prompt
+
             refs = await _resolve_refs(req)
             _validate_refs(req.mode, refs)
             router_inst = get_router()
             payload = _build_payload(cap, req, refs)
+            # 模板 prompt 覆盖手写 prompt
+            payload["prompt"] = effective_prompt
             result = await router_inst.route(cap, payload)
 
             images = result.get("images") or (
@@ -270,14 +382,22 @@ async def generate(req: GenerateRequest):
                 )
                 return
 
+            # 自动推断 group_id
+            group_id = req.group_id
+            if not group_id and template_meta.get("auto_group_id"):
+                group_id = template_meta["auto_group_id"]
+
             asset_ids: list[str] = []
             for idx, img in enumerate(images):
                 if not req.save_as_asset:
                     continue
-                tags = list(req.tags) + [f"mode:{req.mode}"]
+                tags = list(req.tags)
+                if template_meta:
+                    tags.extend(_build_template_tags(template_meta))
+                tags.append(f"mode:{req.mode}")
                 if req.mode == "sequential" and len(images) > 1:
                     tags.append(f"seq:{idx}")
-                info = await _persist_image(img, req.prompt, tags, req.group_id)
+                info = await _persist_image(img, effective_prompt, tags, group_id)
                 if info.get("asset_id"):
                     asset_ids.append(info["asset_id"])
 
@@ -331,18 +451,32 @@ async def stream_generate_start(req: GenerateRequest):
     async def _runner() -> None:
         try:
             await push_event(job.id, {"type": "started", "run_id": job.id, "job_id": job.id})
+
+            # 模板解析
+            template_prompt, template_meta = await _resolve_template_prompt(req)
+            effective_prompt = template_prompt or req.prompt
+
             refs = await _resolve_refs(req)
             payload = _build_payload(cap, req, refs, run_id=job.id)
+            payload["prompt"] = effective_prompt
             result = await router_inst.route(cap, payload)
 
             images = result.get("images") or []
             persisted: list[dict[str, Any]] = []
             asset_ids: list[str] = []
 
+            # 自动推断 group_id
+            group_id = req.group_id
+            if not group_id and template_meta.get("auto_group_id"):
+                group_id = template_meta["auto_group_id"]
+
             if req.save_as_asset:
                 for idx, img in enumerate(images):
-                    tags = list(req.tags) + ["mode:sequential", f"seq:{idx}"]
-                    info = await _persist_image(img, req.prompt, tags, req.group_id)
+                    tags = list(req.tags)
+                    if template_meta:
+                        tags.extend(_build_template_tags(template_meta))
+                    tags.extend(["mode:sequential", f"seq:{idx}"])
+                    info = await _persist_image(img, effective_prompt, tags, group_id)
                     persisted.append(info)
                     if info.get("asset_id"):
                         asset_ids.append(info["asset_id"])

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..asset_hub.db import AssetDB
 from ..storage.base import StorageBackend
 from ..providers.router import CapabilityRouter
 from ..engine.executor import Executor
-from ..templates.db import TemplateDB
+
+if TYPE_CHECKING:
+    from ..templates.db import TemplateDB
 
 # ---- 全局单例（由 app.py lifespan 初始化） ----
 
@@ -16,7 +18,7 @@ _db: AssetDB | None = None
 _storage: StorageBackend | None = None
 _router: CapabilityRouter | None = None
 _executor: Executor | None = None
-_template_db: TemplateDB | None = None
+_template_db: TemplateDB | None = None  # noqa: F821 — TYPE_CHECKING only
 
 
 def get_db() -> AssetDB:

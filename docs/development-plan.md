@@ -1,7 +1,7 @@
 # SpriteFlow 开发计划
 
 > 最后更新：2026-06-06
-> 总进度：4 / 10 Phase 完成
+> 总进度：5 / 10 Phase 完成
 
 ---
 
@@ -108,14 +108,19 @@
 > 🔑 **关键里程碑**：模板驱动生成跑通，后续工作在此基础上扩展
 
 **目标**：生成请求不再手写 prompt，而是选 Spec + 角色 + 动作  
-**预计**：2天 | **状态**：⬜ 未开始
+**预计**：2天 | **状态**：✅ 已完成
 
-- [ ] 5.1 `GenerateRequest` 新增 `spec_id`、`character_template_id`、`action_template_id` 可选字段
-- [ ] 5.2 `generate.py` 中，若提供模板参数，用 `PromptBuilder` 拼装 prompt 替代原始 prompt
-- [ ] 5.3 生成结果自动打 tag：`stage:master` / `stage:walk` / `char:warrior` / `spec:rpg_chibi`
-- [ ] 5.4 支持"基于上一阶段最佳结果"：`ref_asset_ids` + 当前阶段 prompt → img2img
+- [x] 5.1 `GenerateRequest` 新增 `spec_id`、`character_template_id`、`action_template_id` 可选字段
+- [x] 5.2 `generate.py` 中，若提供模板参数，用 `PromptBuilder` 拼装 prompt 替代原始 prompt
+- [x] 5.3 生成结果自动打 tag：`stage:master` / `stage:walk` / `char:warrior` / `spec:rpg_chibi`
+- [x] 5.4 支持"基于上一阶段最佳结果"：`ref_asset_ids` + 当前阶段 prompt → img2img
 
 **验收**：选 Spec + 剑士 + 待机 → 一键生成 4 张候选 → 选一张设为 next_ref → 走路阶段基于它生成
+
+**修改文件**：
+- `src/spriteflow/api/generate.py` — 扩展 GenerateRequest（新增 spec_id/character_template_id/action_template_id），新增 _resolve_template_prompt/_build_template_tags，集成到 _runner 和 stream_generate_start
+- `src/spriteflow/api/deps.py` — TemplateDB 导入改为 TYPE_CHECKING（解除循环依赖）
+- `tests/test_template_generate.py` — 新建，13 个模板驱动生成测试
 
 ---
 
@@ -192,7 +197,7 @@
 ```
 Phase 3  ████████████████████████████ OpenRouter        (4/4)  ✅
 Phase 4  ████████████████████████████ Extract+Pack      (4/4)  ✅  🔑
-Phase 5  ░░░░░░░░░░░░░░░░░░░░░░░░░░ 模板驱动生成       (0/4)  ⬜  🔑
+Phase 5  ████████████████████████████ 模板驱动生成       (4/4)  ✅  🔑
 Phase 6  ░░░░░░░░░░░░░░░░░░░░░░░░░░ 批量生成引擎       (0/4)  ⬜
 Phase 7  ░░░░░░░░░░░░░░░░░░░░░░░░░░ 前端模板管理       (0/5)  ⬜
 Phase 8  ░░░░░░░░░░░░░░░░░░░░░░░░░░ 前端批量生成       (0/4)  ⬜
