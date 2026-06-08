@@ -2,6 +2,8 @@
 
 > A node-based workflow platform for 2D game asset production — compose, generate, process, and export.
 
+[中文文档](README_zh-CN.md)
+
 ---
 
 ## Overview
