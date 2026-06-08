@@ -2,9 +2,12 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { TopBar } from "./TopBar";
 import { SideNav } from "./SideNav";
 import { StatusBar } from "./StatusBar";
+import { useMenuStore } from "@/stores/menu";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const mainRef = useRef<HTMLElement | null>(null);
+  const collapsed = useMenuStore((s) => s.collapsed);
+  const sidebarWidth = collapsed ? 56 : 200;
 
   // 鼠标位置 → CSS 变量（聚光灯/网格遮罩跟随）
   useEffect(() => {
@@ -31,7 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="grid h-screen relative" style={{ gridTemplateRows: "52px 1fr 30px" }}>
       <TopBar />
-      <div className="grid overflow-hidden" style={{ gridTemplateColumns: "200px 1fr" }}>
+      <div className="grid overflow-hidden" style={{ gridTemplateColumns: `${sidebarWidth}px 1fr` }}>
         <SideNav />
         <main
           ref={mainRef}
@@ -91,7 +94,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             }}
           />
 
-          <div className="relative z-10 p-6">{children}</div>
+          <div className="relative z-10 p-6 h-full">{children}</div>
         </main>
       </div>
       <StatusBar />

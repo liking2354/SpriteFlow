@@ -5,12 +5,12 @@ import { Popover } from "./Popover";
 /* 尺寸选择：分辨率（2K/4K） + 比例（智能/1:1/3:4/4:3/16:9/9:16/2:3/3:2/21:9） + 自定义 W/H 联动 */
 
 interface Props {
-  resolution: "2K" | "4K";
+  resolution: "2k" | "4k";
   ratio: string;                      // "smart" | "1:1" | ...
   width: number;
   height: number;
   onChange: (next: {
-    resolution: "2K" | "4K";
+    resolution: "2k" | "4k";
     ratio: string;
     width: number;
     height: number;
@@ -30,8 +30,8 @@ export const RATIOS: Array<{ key: string; label: string; w: number; h: number; i
 ];
 
 /** 根据分辨率 + 比例计算 W/H（≥3686400 像素） */
-function calcSize(resolution: "2K" | "4K", ratio: string): { w: number; h: number } {
-  const target = resolution === "4K" ? 4096 * 4096 : 2048 * 2048;
+function calcSize(resolution: "2k" | "4k", ratio: string): { w: number; h: number } {
+  const target = resolution === "4k" ? 4096 * 4096 : 2048 * 2048;
   const r = RATIOS.find((x) => x.key === ratio);
   if (!r || r.key === "smart") {
     const side = Math.round(Math.sqrt(target));
@@ -58,7 +58,7 @@ export function SizePopover(props: Props) {
     setH(height);
   }, [width, height]);
 
-  const setRes = (next: "2K" | "4K") => {
+  const setRes = (next: "2k" | "4k") => {
     const s = calcSize(next, ratio);
     onChange({ resolution: next, ratio, width: s.w, height: s.h });
   };
@@ -96,7 +96,7 @@ export function SizePopover(props: Props) {
           {t("size.resolution")}
         </div>
         <div className="flex bg-bg-0 border border-line rounded-s p-[3px] gap-[3px] mb-4">
-          {(["2K", "4K"] as const).map((r) => (
+          {(["2k", "4k"] as const).map((r) => (
             <button
               key={r}
               type="button"

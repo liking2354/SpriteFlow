@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..engine.executor import RunStatus, WorkflowRun
 from ..workflow.yaml_loader import WorkflowLoader
@@ -27,9 +27,11 @@ class WorkflowSubmit(BaseModel):
 class WorkflowRunResponse(BaseModel):
     """工作流执行响应"""
 
-    run_id: str
+    run_id: str = Field(serialization_alias="runId")
     status: str
     results: dict[str, Any] = {}
+
+    model_config = {"populate_by_name": True}
 
 
 @router.post("/workflows", response_model=WorkflowRunResponse)
@@ -65,7 +67,7 @@ async def submit_workflow(body: WorkflowSubmit):
         results={
             nid: {
                 "status": r.status.value,
-                "cache_hit": r.cache_hit,
+                "cacheHit": r.cache_hit,
                 "error": r.error,
             }
             for nid, r in run.results.items()
@@ -86,7 +88,7 @@ async def get_run_status(run_id: str):
         results={
             nid: {
                 "status": r.status.value,
-                "cache_hit": r.cache_hit,
+                "cacheHit": r.cache_hit,
                 "error": r.error,
             }
             for nid, r in run.results.items()

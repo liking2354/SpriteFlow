@@ -8,7 +8,7 @@ from typing import Any
 
 import aiosqlite
 
-from .models import Asset, AssetGroup, GenerationJob, SCHEMA_DDL
+from .models import Asset, AssetGroup, GenerationJob, GraphRun, GraphNodeResult, SCHEMA_DDL
 from .video_models import VideoTask, VIDEO_SCHEMA_DDL
 from ..config import settings
 
@@ -41,6 +41,8 @@ class AssetDB:
         await self._add_column_if_missing("assets", "favorite", "INTEGER NOT NULL DEFAULT 0")
         await self._add_column_if_missing("generation_jobs", "parent_id", "TEXT")
         await self._add_column_if_missing("assets", "group_id", "TEXT")
+        await self._add_column_if_missing("graph_node_results", "node_type", "TEXT NOT NULL DEFAULT ''")
+        await self._add_column_if_missing("graph_node_results", "inputs_json", "TEXT")
         # 在确保列存在后再建索引
         await self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_assets_favorite ON assets(favorite)"
@@ -494,6 +496,182 @@ class AssetDB:
         await self._conn.commit()
         return cursor.rowcount > 0
 
+    # ============================ GraphRun + GraphNodeResult CRUD ============================
+
+    async def create_graph_run(self, run: GraphRun) -> GraphRun:
+        assert self._conn is not None
+        await self._conn.execute(
+            """INSERT INTO graph_runs (id, graph_id, graph_name, graph_json, status,
+               started_at, finished_at, summary_json, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                run.id, run.graph_id, run.graph_name, run.graph_json,
+                run.status, run.started_at, run.finished_at, run.summary_json,
+                run.created_at,
+            ),
+        )
+        await self._conn.commit()
+        return run
+
+    async def update_graph_run(
+        self,
+        run_id: str,
+        *,
+        status: str | None = None,
+        finished_at: str | None = None,
+        summary_json: str | None = None,
+    ) -> bool:
+        assert self._conn is not None
+        sets: list[str] = []
+        params: list[Any] = []
+        if status is not None:
+            sets.append("status = ?"); params.append(status)
+        if finished_at is not None:
+            sets.append("finished_at = ?"); params.append(finished_at)
+        if summary_json is not None:
+            sets.append("summary_json = ?"); params.append(summary_json)
+        if not sets:
+            return False
+        params.append(run_id)
+        cursor = await self._conn.execute(
+            f"UPDATE graph_runs SET {', '.join(sets)} WHERE id = ?", params
+        )
+        await self._conn.commit()
+        return cursor.rowcount > 0
+
+    async def get_graph_run(self, run_id: str) -> GraphRun | None:
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            "SELECT * FROM graph_runs WHERE id = ?", (run_id,)
+        )
+        row = await cursor.fetchone()
+        return self._row_to_graph_run(row) if row else None
+
+    async def list_graph_runs(
+        self,
+        *,
+        graph_id: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[GraphRun], int]:
+        assert self._conn is not None
+        clauses: list[str] = []
+        params: list[Any] = []
+        if graph_id is not None:
+            clauses.append("graph_id = ?"); params.append(graph_id)
+        if status is not None:
+            clauses.append("status = ?"); params.append(status)
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+
+        c1 = await self._conn.execute(
+            f"SELECT COUNT(*) AS cnt FROM graph_runs {where}", params
+        )
+        cnt_row = await c1.fetchone()
+        total = cnt_row["cnt"] if cnt_row else 0
+
+        c2 = await self._conn.execute(
+            f"SELECT * FROM graph_runs {where} "
+            f"ORDER BY datetime(created_at) DESC LIMIT ? OFFSET ?",
+            (*params, limit, offset),
+        )
+        rows = await c2.fetchall()
+        return [self._row_to_graph_run(r) for r in rows], total
+
+    async def delete_graph_run(self, run_id: str) -> bool:
+        assert self._conn is not None
+        # 先删子记录
+        await self._conn.execute(
+            "DELETE FROM graph_node_results WHERE run_id = ?", (run_id,)
+        )
+        cursor = await self._conn.execute(
+            "DELETE FROM graph_runs WHERE id = ?", (run_id,)
+        )
+        await self._conn.commit()
+        return cursor.rowcount > 0
+
+    # ── Node Results ──
+
+    async def upsert_node_result(self, nr: GraphNodeResult) -> GraphNodeResult:
+        """插入或更新节点执行结果（run_id + node_id 唯一）"""
+        assert self._conn is not None
+        await self._conn.execute(
+            """INSERT INTO graph_node_results
+               (run_id, node_id, status, cache_hit, error, asset_id, url, display_url,
+                thumbnail_b64, started_at, finished_at, node_type, inputs_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(run_id, node_id) DO UPDATE SET
+               status = excluded.status,
+               cache_hit = excluded.cache_hit,
+               error = excluded.error,
+               asset_id = excluded.asset_id,
+               url = excluded.url,
+               display_url = excluded.display_url,
+               thumbnail_b64 = excluded.thumbnail_b64,
+               started_at = excluded.started_at,
+               finished_at = excluded.finished_at,
+               node_type = excluded.node_type,
+               inputs_json = excluded.inputs_json""",
+            (
+                nr.run_id, nr.node_id, nr.status,
+                1 if nr.cache_hit else 0, nr.error,
+                nr.asset_id, nr.url, nr.display_url,
+                nr.thumbnail_b64, nr.started_at, nr.finished_at,
+                nr.node_type, nr.inputs_json,
+            ),
+        )
+        await self._conn.commit()
+        return nr
+
+    async def get_node_results(self, run_id: str) -> list[GraphNodeResult]:
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            "SELECT * FROM graph_node_results WHERE run_id = ? ORDER BY id", (run_id,)
+        )
+        rows = await cursor.fetchall()
+        return [self._row_to_graph_node_result(r) for r in rows]
+
+    async def delete_node_results(self, run_id: str) -> int:
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            "DELETE FROM graph_node_results WHERE run_id = ?", (run_id,)
+        )
+        await self._conn.commit()
+        return cursor.rowcount
+
+    # ── helpers ──
+
+    def _row_to_graph_run(self, row: aiosqlite.Row) -> GraphRun:
+        return GraphRun(
+            id=row["id"],
+            graph_id=row["graph_id"],
+            graph_name=row["graph_name"] or "",
+            graph_json=row["graph_json"],
+            status=row["status"],
+            started_at=row["started_at"],
+            finished_at=row["finished_at"],
+            summary_json=row["summary_json"],
+            created_at=row["created_at"],
+        )
+
+    def _row_to_graph_node_result(self, row: aiosqlite.Row) -> GraphNodeResult:
+        keys = row.keys()
+        return GraphNodeResult(
+            run_id=row["run_id"],
+            node_id=row["node_id"],
+            status=row["status"],
+            cache_hit=bool(row["cache_hit"]),
+            error=row["error"],
+            asset_id=row["asset_id"],
+            url=row["url"],
+            display_url=row["display_url"],
+            thumbnail_b64=row["thumbnail_b64"],
+            started_at=row["started_at"],
+            finished_at=row["finished_at"],
+            node_type=row["node_type"] if "node_type" in keys else "",
+            inputs_json=row["inputs_json"] if "inputs_json" in keys else None,
+        )
+
     # ============================ helpers ============================
 
     def _row_to_asset(self, row: aiosqlite.Row) -> Asset:
@@ -693,3 +871,50 @@ class AssetDB:
             updated_at=row["updated_at"],
             completed_at=row["completed_at"],
         )
+
+    # ============================ 运行时配置 ============================
+
+    async def get_config(self, key: str) -> str | None:
+        """读取单个配置项"""
+        assert self._conn is not None
+        cursor = await self._conn.execute("SELECT value FROM configs WHERE key = ?", (key,))
+        row = await cursor.fetchone()
+        return row["value"] if row else None
+
+    async def set_config(self, key: str, value: str) -> None:
+        """写入/更新单个配置项"""
+        assert self._conn is not None
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        await self._conn.execute(
+            "INSERT OR REPLACE INTO configs (key, value, updated_at) VALUES (?, ?, ?)",
+            (key, value, now),
+        )
+        await self._conn.commit()
+
+    async def get_configs_by_prefix(self, prefix: str) -> dict[str, str]:
+        """读取指定前缀的所有配置项，去前缀返回"""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            "SELECT key, value FROM configs WHERE key LIKE ?", (f"{prefix}%",)
+        )
+        rows = await cursor.fetchall()
+        return {row["key"][len(prefix):]: row["value"] for row in rows}
+
+    async def set_configs_batch(self, items: dict[str, str]) -> None:
+        """批量写入配置"""
+        assert self._conn is not None
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        for key, value in items.items():
+            await self._conn.execute(
+                "INSERT OR REPLACE INTO configs (key, value, updated_at) VALUES (?, ?, ?)",
+                (key, value, now),
+            )
+        await self._conn.commit()
+
+    async def delete_config(self, key: str) -> None:
+        """删除单个配置项"""
+        assert self._conn is not None
+        await self._conn.execute("DELETE FROM configs WHERE key = ?", (key,))
+        await self._conn.commit()

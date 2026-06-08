@@ -32,7 +32,7 @@ class AppSettings(BaseSettings):
     ark_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
     seedream_model: str = "doubao-seedream-5-0-260128"
     # 火山方舟 Seedance（视频生成，复用 ark_api_key 与 base_url）
-    seedance_model: str = "doubao-seedance-2-0-260128"
+    seedance_model: str = "doubao-seedance-1-5-pro-251215"
     seedance_poll_interval_sec: float = 5.0
     seedance_request_timeout: float = 60.0
 
@@ -40,6 +40,13 @@ class AppSettings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_default_model: str = "openai/gpt-image-1"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
+
+    # 生成任务重试
+    generation_retry_count: int = 2
+    generation_retry_delay_sec: float = 1.0
+
+    # 图片下载超时（秒）
+    image_download_timeout: float = 120.0
 
     # 火山引擎 AI MediaKit（图像处理）
     volc_access_key_id: str = ""

@@ -88,7 +88,7 @@ export function WorkflowsPage() {
               <div className="grid grid-cols-2 gap-3 mb-4 px-3 py-2.5 bg-bg-0 rounded-s font-mono text-[11px] text-txt-2">
                 <span>
                   <span className="text-txt-3">{t("workflows.result.runId")}: </span>
-                  {run.run_id}
+                  {run.runId}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Led color={STATUS_COLOR[run.status]} size={6} />
@@ -105,7 +105,7 @@ export function WorkflowsPage() {
                     <Led color={STATUS_COLOR[r.status]} size={7} />
                     <span className="font-mono text-[12px] text-txt-1">{nid}</span>
                     <span className="ml-auto text-[10.5px] text-txt-2 font-mono">
-                      {r.cache_hit && (
+                      {r.cacheHit && (
                         <span className="text-[var(--cyan)] mr-2">⚡ cache</span>
                       )}
                       {t(`workflows.result.${r.status}`)}

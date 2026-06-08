@@ -17,6 +17,7 @@ from .types import PortType
 
 class RunStatus(str, Enum):
     PENDING = "pending"
+    QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -31,8 +32,13 @@ class NodeRunResult:
     outputs: dict[str, Any] = field(default_factory=dict)
     cache_hit: bool = False
     error: str | None = None
+    asset_id: str | None = None
+    url: str | None = None
+    thumbnail_url: str | None = None
     started_at: str = ""
     finished_at: str = ""
+    node_type: str = ""
+    inputs: dict[str, Any] = field(default_factory=dict)  # 执行输入快照（prompt/params 等）
 
 
 @dataclass
@@ -63,6 +69,7 @@ class Executor:
         router: Any = None,
         storage: Any = None,
         db: Any = None,
+        template_db: Any = None,
         timeout: float = 120.0,
         max_retries: int = 2,
     ) -> None:
@@ -70,23 +77,39 @@ class Executor:
         self.router = router
         self.storage = storage
         self.db = db
+        self.template_db = template_db
         self.timeout = timeout
         self.max_retries = max_retries
 
-    async def execute(self, dag: DAG, run_id: str = "", workflow_name: str = "") -> WorkflowRun:
-        """执行整个 DAG 工作流"""
-        run = WorkflowRun(
-            run_id=run_id or f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            workflow_name=workflow_name,
-            status=RunStatus.RUNNING,
-            started_at=datetime.now().isoformat(),
-        )
+    async def execute(
+        self,
+        dag: DAG,
+        run: WorkflowRun | None = None,
+        run_id: str = "",
+        workflow_name: str = "",
+    ) -> WorkflowRun:
+        """执行整个 DAG 工作流
+
+        如果传入 run，则直接使用该对象更新进度（用于 SSE 实时推送场景）；
+        否则创建一个新的 WorkflowRun。
+        """
+        if run is not None:
+            run.status = RunStatus.RUNNING
+            run.started_at = datetime.now().isoformat()
+        else:
+            run = WorkflowRun(
+                run_id=run_id or f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                workflow_name=workflow_name,
+                status=RunStatus.RUNNING,
+                started_at=datetime.now().isoformat(),
+            )
 
         ctx = Context(
             cache=self.cache,
             router=self.router,
             storage=self.storage,
             db=self.db,
+            template_db=self.template_db,
             run_id=run.run_id,
         )
 
@@ -111,12 +134,19 @@ class Executor:
             if not ready:
                 raise RuntimeError("死锁：没有可执行的节点，但还有未执行的节点")
 
+            # 标记就绪节点为 QUEUED（SSE 可感知）
+            for nid in ready:
+                run.results[nid] = NodeRunResult(
+                    node_id=nid,
+                    status=RunStatus.QUEUED,
+                )
+
             # 并发执行就绪节点
             tasks = [self._execute_node(dag, nid, ctx, run) for nid in ready]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             for nid, result in zip(ready, results):
-                if isinstance(result, Exception):
+                if isinstance(result, BaseException):
                     run.status = RunStatus.FAILED
                     run.results[nid] = NodeRunResult(
                         node_id=nid,
@@ -141,6 +171,8 @@ class Executor:
         """执行单个节点（含缓存检查和重试）"""
         node_def = dag.nodes[node_id]
         node_instance = create_node(node_def.type)
+        node_instance.node_id = node_id
+        node_type = node_def.type
 
         # 解析上游输入
         inputs: dict[str, Any] = {}
@@ -166,20 +198,35 @@ class Executor:
                 outputs = {k: cached_image for k in node_instance.OUTPUTS}
                 ctx.set_node_output(node_id, outputs)
                 ctx.set_input_hashes(node_id, input_hashes)
+                # 缓存命中也尝试持久化（如果之前未保存）
+                asset_id, url, thumb_url = await self._persist_outputs(node_id, outputs, ctx)
                 result = NodeRunResult(
                     node_id=node_id,
                     status=RunStatus.COMPLETED,
                     outputs=outputs,
                     cache_hit=True,
+                    asset_id=asset_id,
+                    url=url,
+                    thumbnail_url=thumb_url,
                     started_at=datetime.now().isoformat(),
                     finished_at=datetime.now().isoformat(),
+                    node_type=node_type,
                 )
                 run.results[node_id] = result
                 ctx.log(f"节点 '{node_id}' 缓存命中，跳过执行")
                 return result
 
+        # 标记节点为运行中（SSE 可感知）
+        run.results[node_id] = NodeRunResult(
+            node_id=node_id,
+            status=RunStatus.RUNNING,
+            started_at=datetime.now().isoformat(),
+            node_type=node_type,
+        )
+
         # 执行节点（含重试）
-        last_error: Exception | None = None
+        # 注意：用 BaseException 而非 Exception 以捕获 SystemExit 等非标准异常
+        last_error: BaseException | None = None
         for attempt in range(self.max_retries + 1):
             try:
                 ctx.set_input_hashes(node_id, input_hashes)
@@ -188,7 +235,7 @@ class Executor:
                     timeout=self.timeout,
                 )
                 break
-            except Exception as e:
+            except BaseException as e:
                 last_error = e
                 if attempt < self.max_retries:
                     ctx.log(f"节点 '{node_id}' 第 {attempt + 1} 次执行失败，重试中: {e}")
@@ -205,17 +252,103 @@ class Executor:
                 self.cache.save_image(cache_key, value)
 
         ctx.set_node_output(node_id, outputs)
+
+        # 持久化输出为 Asset
+        asset_id, url, thumb_url = await self._persist_outputs(node_id, outputs, ctx)
+
+        node_inputs = ctx.get_node_inputs(node_id)
         result = NodeRunResult(
             node_id=node_id,
             status=RunStatus.COMPLETED,
             outputs=outputs,
             cache_hit=False,
+            asset_id=asset_id,
+            url=url,
+            thumbnail_url=thumb_url,
             started_at=datetime.now().isoformat(),
             finished_at=datetime.now().isoformat(),
+            node_type=node_type,
+            inputs=node_inputs,
         )
         run.results[node_id] = result
         ctx.log(f"节点 '{node_id}' 执行完成")
         return result
+
+    async def _persist_outputs(
+        self,
+        node_id: str,
+        outputs: dict[str, Any],
+        ctx: Context,
+    ) -> tuple[str | None, str | None, str | None]:
+        """将节点输出的 PIL.Image 自动保存为 Asset，返回 (asset_id, url, thumbnail_url)"""
+        from PIL import Image
+        import hashlib
+        import io
+
+        if ctx.storage is None:
+            return None, None, None
+
+        for port_name, value in outputs.items():
+            if isinstance(value, Image.Image):
+                candidates = [value]
+            elif isinstance(value, list):
+                candidates = [v for v in value if isinstance(v, Image.Image)]
+            else:
+                continue
+
+            for img in candidates:
+                try:
+                    # 编码图片
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    data = buf.getvalue()
+
+                    # 计算内容哈希
+                    content_hash = hashlib.sha256(data).hexdigest()[:32]
+
+                    # 上传到存储
+                    from ..storage.base import StoragePrefix
+                    file_key = f"{content_hash}.png"
+                    uri = await ctx.storage.upload(file_key, data, prefix=StoragePrefix.GENERATED)
+
+                    # 生成缩略图
+                    thumb = img.copy()
+                    thumb.thumbnail((256, 256), Image.Resampling.LANCZOS)
+                    thumb_buf = io.BytesIO()
+                    thumb.save(thumb_buf, format="PNG")
+                    thumb_data = thumb_buf.getvalue()
+
+                    thumb_key = f"{content_hash}.png"
+                    thumbnail_uri = await ctx.storage.upload(
+                        thumb_key, thumb_data, prefix=StoragePrefix.THUMBNAILS,
+                    )
+
+                    # 写入数据库
+                    asset_id = content_hash
+                    if hasattr(ctx, 'db') and ctx.db is not None:
+                        from ..asset_hub.models import Asset
+                        asset = Asset(
+                            type="image",
+                            source="generated",
+                            uri=uri,
+                            hash=content_hash,
+                            width=img.width,
+                            height=img.height,
+                            thumbnail=thumbnail_uri,
+                            tags=[],
+                            provenance={"run_id": ctx.run_id, "node_id": node_id, "port": port_name},
+                        )
+                        await ctx.db.create_asset(asset)
+                        asset_id = asset.id
+
+                    ctx.log(f"节点 '{node_id}' 输出已保存为资产: {asset_id}")
+                    return asset_id, uri, thumbnail_uri
+
+                except Exception as e:
+                    ctx.log(f"节点 '{node_id}' 输出持久化失败: {e}")
+                    continue
+
+        return None, None, None
 
     async def _call_execute(
         self, node_instance: Any, inputs: dict, params: dict, ctx: Context

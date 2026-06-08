@@ -1,0 +1,56 @@
+# Phase 10 — 端到端角色生产管线
+# 完整链路：文生图角色母版 → 去背景 → 精灵对齐 → 入库
+# 后续可接入：选优 → 视频生成 → 抽帧 → 拼合精灵表 → 导入 Godot
+#
+# 用法：
+#   POST /api/workflows  body: {"yaml_path": "workflows/end_to_end_character.yaml"}
+#
+# 验证要点：
+#   1. 生成的角色尺寸统一落在 64×64 画布内
+#   2. 标签包含 char:xxx / spec:xxx / stage:xxx 三层元数据
+#   3. 输出可直接作为精灵表工具的输入帧
+
+version: 1
+
+name: end_to_end_character
+description: "完整角色生产链路：文生图 → 去背景 → 精灵对齐 → 入库"
+
+nodes:
+  - step: generate
+    node: Text2Img
+    params:
+      prompt: "16-bit pixel art. Game character sprite. A brave knight in silver armor, holding a sword. RPG top-down view. Clean pixel edges, vibrant colors, game asset."
+      size: "2K"
+      max_images: 4
+      seed: null
+      web_search: false
+      watermark: false
+
+  - step: remove_bg
+    node: RemoveBG
+    params: {}
+
+  - step: align
+    node: SpriteAlign
+    params:
+      canvas_width: 64
+      canvas_height: 64
+      target_width: 28
+      target_height: 48
+      detect_threshold: 32
+      padding: 8
+      auto_center: true
+      auto_crop: true
+      bottom_align: true
+
+  - step: save
+    node: SaveAsset
+    params:
+      tags:
+        - "char:knight"
+        - "spec:rpg_chibi_default"
+        - "stage:master"
+        - "style:pixel"
+        - "pipeline:e2e"
+      save_as_asset: true
+      stream: false

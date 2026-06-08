@@ -28,6 +28,9 @@ class Node:
     # 运行时由注册表填充
     _node_type: str = ""
 
+    # 运行时由执行器注入
+    node_id: str = ""
+
     @property
     def node_type(self) -> str:
         return self._node_type or self.__class__.__name__

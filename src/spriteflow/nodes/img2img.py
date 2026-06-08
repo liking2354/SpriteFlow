@@ -26,7 +26,7 @@ class Img2ImgNode(Node):
         payload = {
             "prompt": params.get("prompt", ""),
             "image": image,
-            "size": params.get("size", "2K"),
+            "size": params.get("size", "2k"),
             "seed": params.get("seed"),
             "guidance_scale": params.get("guidance_scale"),
             "watermark": params.get("watermark", False),
@@ -41,4 +41,5 @@ class Img2ImgNode(Node):
             raise ValueError("img2img provider 未返回图片")
 
         ctx.log(f"图生图完成: prompt='{payload['prompt'][:50]}...'")
+        ctx.set_node_inputs(self.node_id, {"prompt": payload["prompt"], "params": params})
         return {"image": output_image}

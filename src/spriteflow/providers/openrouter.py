@@ -128,16 +128,16 @@ class OpenRouterProvider(Provider):
         if not prompt:
             raise ValueError("OpenRouter 调用必须提供 prompt")
 
-        # 模型优先级：payload.model > 场景默认 > provider 默认
+        # 模型优先级：payload.model > 用户配置 > 场景默认
         model = (
             payload.get("model")
-            or self._SCENE_MODEL.get(cap)
             or self._model
+            or self._SCENE_MODEL.get(cap)
         )
         n = int(payload.get("max_images", 1))
 
-        # 构造 messages（character_master / four_view 内部走 text2img 逻辑）
-        is_img2img = cap in (Capability.IMG2IMG,)
+        # 构造 messages（character_master 走 text2img，four_view 走 img2img）
+        is_img2img = cap in (Capability.IMG2IMG, Capability.FOUR_VIEW)
         if is_img2img:
             ref = payload.get("image")
             if ref is None:

@@ -32,7 +32,7 @@ export function GeneratePage() {
   const [mode, setMode] = useState<GenerateMode>("text2img");
   const [prompt, setPrompt] = useState("");
   const [refs, setRefs] = useState<RefImage[]>([]);
-  const [resolution, setResolution] = useState<"2K" | "4K">("2K");
+  const [resolution, setResolution] = useState<"2k" | "4k">("2k");
   const [ratio, setRatio] = useState<string>("1:1");
   const [width, setWidth] = useState(2048);
   const [height, setHeight] = useState(2048);
@@ -206,7 +206,7 @@ export function GeneratePage() {
     setSaveAsset(true);
     setMaxImages(3);
     setRatio("1:1");
-    setResolution("2K");
+    setResolution("2k");
     setWidth(2048);
     setHeight(2048);
   };

@@ -1,0 +1,67 @@
+{
+  "id": "preset-character",
+  "name": "角色管线 (预设)",
+  "description": "标准角色生产管线：角色母版 → 方向变体 → 保存素材",
+  "nodes": [
+    {
+      "id": "node-cm-1",
+      "type": "CharacterMaster",
+      "x": 100,
+      "y": 100,
+      "params": {
+        "template_ids": "tpl-spec-16bit-rpg,tpl-char-warrior",
+        "slot_values": {
+          "character_desc": "dark warrior with heavy armor",
+          "color_palette": "crimson, obsidian, gold"
+        },
+        "size": "2k",
+        "canvas_width": 512,
+        "canvas_height": 512,
+        "target_width": 448,
+        "target_height": 480,
+        "style_prompt": "pixel art, 16-bit RPG style, chibi proportions"
+      }
+    },
+    {
+      "id": "node-dv-1",
+      "type": "DirectionVariant",
+      "x": 400,
+      "y": 100,
+      "params": {
+        "template_ids": "tpl-dir-down,tpl-dir-up,tpl-dir-left,tpl-dir-right",
+        "slot_values": {
+          "action_frames": "4"
+        },
+        "size": "2k"
+      }
+    },
+    {
+      "id": "node-save-1",
+      "type": "SaveAsset",
+      "x": 700,
+      "y": 100,
+      "params": {
+        "tags": "character,pixel-art"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "src_node": "node-cm-1",
+      "src_port": "image",
+      "dst_node": "node-dv-1",
+      "dst_port": "image"
+    },
+    {
+      "id": "edge-2",
+      "src_node": "node-dv-1",
+      "src_port": "images",
+      "dst_node": "node-save-1",
+      "dst_port": "image"
+    }
+  ],
+  "tags": ["预设", "角色", "管线"],
+  "created_at": "",
+  "updated_at": ""
+}

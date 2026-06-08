@@ -105,6 +105,44 @@
   --acc-rgb: 255, 182, 72;
 }
 
+/* ============================================================
+   ComfyUI-style 管线节点
+   ============================================================ */
+.comfy-node {
+  min-width: 220px;
+  max-width: 280px;
+  border-radius: 8px;
+  border: 1px solid #2a2a4a;
+  background: #12121f;
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* 连接端口（大圆点） */
+.comfy-handle {
+  width: 12px !important;
+  height: 12px !important;
+  border: 2px solid !important;
+  border-radius: 50% !important;
+  background: #12121f !important;
+  transition: transform 0.1s ease !important;
+}
+.comfy-handle:hover {
+  transform: scale(1.3);
+}
+
+/* 四方向子端口（小圆点） */
+.comfy-handle-sub {
+  width: 7px !important;
+  height: 7px !important;
+  border: 1px solid #454c5e !important;
+  border-radius: 50% !important;
+  background: #12121f !important;
+}
+.comfy-handle-sub:hover {
+  border-color: #aab2c5 !important;
+}
+
 /* ============== 基础样式 ============== */
 * {
   box-sizing: border-box;
@@ -204,8 +242,24 @@ textarea:focus {
   to { --angle: 360deg; }
 }
 
+@keyframes node-pulse {
+  0%, 100% { box-shadow: 0 0 8px var(--glow-color, rgba(59,130,246,0.2)), 0 2px 8px rgba(0,0,0,0.15); }
+  50% { box-shadow: 0 0 22px var(--glow-color, rgba(59,130,246,0.45)), 0 2px 8px rgba(0,0,0,0.15); }
+}
+
+@keyframes status-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
 .animate-fade-in { animation: fade-in 0.16s ease-out; }
+
+@keyframes slide-in {
+  from { transform: translateX(-8px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.animate-slide-in { animation: slide-in 0.18s ease-out; }
 
 .spinner {
   width: 14px;

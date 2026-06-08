@@ -50,7 +50,7 @@ class SequentialImagesNode(Node):
         payload = {
             "prompt": params.get("prompt", ""),
             "max_images": max_images,
-            "size": params.get("size", "2K"),
+            "size": params.get("size", "2k"),
             "seed": params.get("seed"),
             "watermark": params.get("watermark", False),
             "output_format": params.get("output_format", "png"),
@@ -81,4 +81,5 @@ class SequentialImagesNode(Node):
             f"组图生成完成: 期望 {max_images} 张，实际 {len(images)} 张，"
             f"refs={len(refs)}, prompt='{payload['prompt'][:40]}...'"
         )
+        ctx.set_node_inputs(self.node_id, {"prompt": payload["prompt"], "params": params})
         return {"images": images, "first": images[0]}

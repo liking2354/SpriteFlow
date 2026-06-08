@@ -1,24 +1,23 @@
-"""模板系统 — SpriteSpec / Prompt 图层 / 角色 / 动作 / VFX / 管线 管理"""
+"""模板系统 — 统一 PromptTemplate 管理
+
+单表模型 + 拼装引擎 + REST API
+"""
 
 from .models import (
-    SpriteSpec, PromptLayer, PromptBlock, BlockCategory, LayerCategory,
-    CharacterTemplate, ActionTemplate, ActionType, VFXTemplate,
-    StagePipeline, StageDef, CanvasSpec, AlignRule, SpriteFormat,
-    PromptAssembly, PromptAssemblyResult,
-    BatchGenerateRequest, BatchGenerateResponse,
+    PromptTemplate, PromptSlot, TemplateType, SlotType,
+    TemplatePreviewRequest, TemplatePreviewResult,
 )
 from .db import TemplateDB, TEMPLATE_SCHEMA_DDL
-from .builder import PromptBuilder
+from .builder import assemble_prompt, preview_prompt
+from .seed import PRESET_TEMPLATES, PRESET_BY_ID
 from .api import router as templates_router
 from ..api.deps import get_template_db, set_template_db
 
 __all__ = [
-    "SpriteSpec", "PromptLayer", "PromptBlock", "BlockCategory", "LayerCategory",
-    "CharacterTemplate", "ActionTemplate", "ActionType", "VFXTemplate",
-    "StagePipeline", "StageDef", "CanvasSpec", "AlignRule", "SpriteFormat",
-    "PromptAssembly", "PromptAssemblyResult",
-    "BatchGenerateRequest", "BatchGenerateResponse",
+    "PromptTemplate", "PromptSlot", "TemplateType", "SlotType",
+    "TemplatePreviewRequest", "TemplatePreviewResult",
     "TemplateDB", "TEMPLATE_SCHEMA_DDL",
-    "PromptBuilder",
+    "assemble_prompt", "preview_prompt",
+    "PRESET_TEMPLATES", "PRESET_BY_ID",
     "templates_router", "get_template_db", "set_template_db",
 ]

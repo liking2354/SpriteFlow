@@ -1,0 +1,45 @@
+{
+  "id": "preset-vfx",
+  "name": "技能特效管线 (预设)",
+  "description": "标准技能特效生产管线：技能特效 → 保存素材",
+  "nodes": [
+    {
+      "id": "node-vfx-1",
+      "type": "SkillVFX",
+      "x": 100,
+      "y": 100,
+      "params": {
+        "template_ids": "tpl-vfx-fireball",
+        "slot_values": {
+          "vfx_name": "fireball",
+          "vfx_type": "projectile",
+          "vfx_desc": "a blazing fireball projectile with trail sparks",
+          "frames": "8"
+        },
+        "max_images": 8,
+        "size": "2k"
+      }
+    },
+    {
+      "id": "node-save-1",
+      "type": "SaveAsset",
+      "x": 400,
+      "y": 100,
+      "params": {
+        "tags": "vfx,fire,skill"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "src_node": "node-vfx-1",
+      "src_port": "images",
+      "dst_node": "node-save-1",
+      "dst_port": "image"
+    }
+  ],
+  "tags": ["预设", "特效", "管线"],
+  "created_at": "",
+  "updated_at": ""
+}

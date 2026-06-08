@@ -257,7 +257,7 @@ async def regenerate_job(job_id: str):
                 prompt=parent.prompt,
                 image_urls=parent.ref_image_urls,
                 ref_asset_ids=parent.ref_asset_ids,
-                size=str(parent.params.get("size", "2K")),
+                size=str(parent.params.get("size", "2k")),
                 width=parent.params.get("width"),
                 height=parent.params.get("height"),
                 seed=parent.params.get("seed"),

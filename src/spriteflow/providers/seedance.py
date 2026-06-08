@@ -31,7 +31,7 @@ class SeedanceProvider(Provider):
     capabilities = {Capability.TEXT2VIDEO, Capability.IMG2VIDEO}
 
     DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
-    DEFAULT_MODEL = "doubao-seedance-2-0-260128"
+    DEFAULT_MODEL = "doubao-seedance-1-5-pro-251215"
 
     def __init__(
         self,

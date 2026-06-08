@@ -57,7 +57,7 @@ class MultiImageFusionNode(Node):
         payload = {
             "prompt": params.get("prompt", ""),
             "image": refs,
-            "size": params.get("size", "2K"),
+            "size": params.get("size", "2k"),
             "seed": params.get("seed"),
             "watermark": params.get("watermark", False),
             "output_format": params.get("output_format", "png"),
@@ -70,4 +70,5 @@ class MultiImageFusionNode(Node):
             raise ValueError("multi_image_fusion provider 未返回图片")
 
         ctx.log(f"多图融合完成: refs={len(refs)} prompt='{payload['prompt'][:40]}...'")
+        ctx.set_node_inputs(self.node_id, {"prompt": payload["prompt"], "params": params})
         return {"image": image}

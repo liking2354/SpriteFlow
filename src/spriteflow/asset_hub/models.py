@@ -64,6 +64,38 @@ class GenerationJob(BaseModel):
     finished_at: str | None = None
 
 
+class GraphRun(BaseModel):
+    """管线图执行记录"""
+
+    id: str = ""
+    graph_id: str = ""
+    graph_name: str = ""
+    graph_json: str | None = None       # JSON string: 完整图快照
+    status: str = "pending"              # pending / running / completed / failed
+    started_at: str | None = None
+    finished_at: str | None = None
+    summary_json: str | None = None      # JSON string: _build_run_summary 结果
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class GraphNodeResult(BaseModel):
+    """单个节点执行结果"""
+
+    run_id: str = Field(default="", serialization_alias="runId")
+    node_id: str = Field(default="", serialization_alias="nodeId")
+    status: str = Field(default="pending", serialization_alias="status")  # pending / queued / running / completed / failed
+    cache_hit: bool = Field(default=False, serialization_alias="cacheHit")
+    error: str | None = Field(default=None, serialization_alias="error")
+    asset_id: str | None = Field(default=None, serialization_alias="assetId")
+    url: str | None = Field(default=None, serialization_alias="rawUrl")                      # 原始存储 URI（如 cos://...）
+    display_url: str | None = Field(default=None, serialization_alias="url")                  # 前端可用的 HTTP URL（由 _resolve_display_url 生成）
+    thumbnail_b64: str | None = Field(default=None, serialization_alias="thumbnail")          # base64 缩略图（≤128px，不含 data: 前缀）
+    started_at: str | None = Field(default=None, serialization_alias="startedAt")
+    finished_at: str | None = Field(default=None, serialization_alias="finishedAt")
+    node_type: str = Field(default="", serialization_alias="nodeType")                        # 节点类型（如 direction_variant, text2img）
+    inputs_json: str | None = Field(default=None, serialization_alias="inputsJson")            # 执行输入快照 JSON（prompt/params 等）
+
+
 # ---- SQLite DDL ----
 
 SCHEMA_DDL = """
@@ -126,4 +158,50 @@ CREATE TABLE IF NOT EXISTS asset_groups (
     description TEXT DEFAULT '',
     created_at  TEXT NOT NULL
 );
+
+-- 运行时配置（路由、凭证、Provider 参数）
+CREATE TABLE IF NOT EXISTS configs (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+
+-- ==================== 管线图运行记录 ====================
+
+-- 管线图执行记录（一次 Run）
+CREATE TABLE IF NOT EXISTS graph_runs (
+    id              TEXT PRIMARY KEY,
+    graph_id        TEXT NOT NULL,
+    graph_name      TEXT NOT NULL DEFAULT '',
+    graph_json      TEXT,                 -- JSON: 完整图快照（PipelineGraphModel），供 rerun/回溯
+    status          TEXT NOT NULL DEFAULT 'pending',
+    started_at      TEXT,
+    finished_at     TEXT,
+    summary_json    TEXT,                 -- JSON: { duration, success_count, failed_count, cache_hits, assets, failed_nodes }
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_graph_runs_graph_id ON graph_runs(graph_id);
+CREATE INDEX IF NOT EXISTS idx_graph_runs_status ON graph_runs(status);
+CREATE INDEX IF NOT EXISTS idx_graph_runs_created ON graph_runs(created_at DESC);
+
+-- 单个节点执行结果
+CREATE TABLE IF NOT EXISTS graph_node_results (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id          TEXT NOT NULL REFERENCES graph_runs(id) ON DELETE CASCADE,
+    node_id         TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    cache_hit       INTEGER NOT NULL DEFAULT 0,
+    error           TEXT,
+    asset_id        TEXT,
+    url             TEXT,                 -- 原始存储 URI
+    display_url     TEXT,                 -- 前端可用的 HTTP URL
+    thumbnail_b64   TEXT,                 -- base64 缩略图（≤128px，约 2-5KB）
+    started_at      TEXT,
+    finished_at     TEXT,
+    node_type       TEXT NOT NULL DEFAULT '',
+    inputs_json     TEXT                  -- JSON: 执行输入快照 {prompt, template_ids, slot_values, variants, params, ...}
+);
+CREATE INDEX IF NOT EXISTS idx_node_results_run ON graph_node_results(run_id);
+CREATE INDEX IF NOT EXISTS idx_node_results_node ON graph_node_results(node_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_node_results_run_node ON graph_node_results(run_id, node_id);
 """

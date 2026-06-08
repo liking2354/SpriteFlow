@@ -24,7 +24,7 @@ class Text2ImgNode(Node):
 
         payload = {
             "prompt": params.get("prompt", ""),
-            "size": params.get("size", "2K"),
+            "size": params.get("size", "2k"),
             "seed": params.get("seed"),
             "guidance_scale": params.get("guidance_scale"),
             "watermark": params.get("watermark", False),
@@ -40,4 +40,5 @@ class Text2ImgNode(Node):
             raise ValueError("text2img provider 未返回图片")
 
         ctx.log(f"文生图完成: prompt='{payload['prompt'][:50]}...'")
+        ctx.set_node_inputs(self.node_id, {"prompt": payload["prompt"], "params": params})
         return {"image": image}

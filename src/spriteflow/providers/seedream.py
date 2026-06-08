@@ -34,6 +34,9 @@ class SeedreamProvider(Provider):
         Capability.IMG2IMG,
         Capability.MULTI_IMAGE_FUSION,
         Capability.SEQUENTIAL_IMAGES,
+        # 场景路由回退：openrouter 不可用时，seedream 也能处理角色母版/四视图
+        Capability.CHARACTER_MASTER,   # → 按 TEXT2IMG 逻辑处理
+        Capability.FOUR_VIEW,          # → 按 IMG2IMG 逻辑处理
     }
 
     DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
@@ -105,7 +108,7 @@ class SeedreamProvider(Provider):
         body: dict[str, Any] = {
             "model": payload.get("model") or self._model,
             "prompt": prompt,
-            "size": payload.get("size", "2K"),
+            "size": _normalize_size(payload.get("size", "2k")),
             "output_format": payload.get("output_format", "png"),
             "response_format": payload.get("response_format", "url"),
             "watermark": bool(payload.get("watermark", False)),
@@ -117,10 +120,10 @@ class SeedreamProvider(Provider):
             body["guidance_scale"] = float(gs)
 
         # ---- 参考图 ----
-        if cap == Capability.IMG2IMG:
+        if cap in (Capability.IMG2IMG, Capability.FOUR_VIEW):
             ref = payload.get("image")
             if ref is None:
-                raise ValueError("IMG2IMG 需要 image 输入")
+                raise ValueError(f"{cap.value} 需要 image 输入")
             body["image"] = self._encode_image(ref)
             body["sequential_image_generation"] = "disabled"
 
@@ -404,6 +407,20 @@ class SeedreamProvider(Provider):
                     )
 
         return images
+
+
+def _normalize_size(size: str) -> str:
+    """标准化 size 参数为 Seedream API 接受的格式
+
+    API 要求: 'WIDTHxHEIGHT', '2k', '3k', '4k'
+    容错处理: 2K → 2k, 1024x1024 保持原样, adaptive 保持原样
+    """
+    s = size.strip()
+    # 处理 '2K' / '3K' / '4K' → 小写 k
+    low = s.lower()
+    if low in ("2k", "3k", "4k"):
+        return low
+    return s  # 其他格式原样传递（如 1024x1024, adaptive）
 
 
 async def _maybe_call(fn: Any, *args: Any) -> None:

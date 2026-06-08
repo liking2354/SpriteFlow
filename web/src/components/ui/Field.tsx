@@ -41,12 +41,22 @@ export function TextArea({ className = "", ...props }: TextareaHTMLAttributes<HT
 
 export function Select({ className = "", children, ...props }: InputHTMLAttributes<HTMLSelectElement> & { children: ReactNode }) {
   return (
-    <select
-      {...(props as object)}
-      className={`w-full px-3 h-9 bg-bg-0 border border-line rounded-s text-[12px] text-txt-0 font-mono focus:border-[var(--acc)] focus:shadow-[0_0_0_3px_var(--acc-soft)] transition-all ${className}`}
-    >
-      {children}
-    </select>
+    <div className="relative">
+      <select
+        {...(props as object)}
+        className={`w-full px-3 pr-8 h-9 bg-bg-0 border border-line rounded-s text-[12px] text-txt-0 font-mono focus:border-[var(--acc)] focus:shadow-[0_0_0_3px_var(--acc-soft)] transition-all appearance-none cursor-pointer ${className}`}
+      >
+        {children}
+      </select>
+      <span
+        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2"
+        style={{ color: "var(--txt-3)" }}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <path d="M3 3.5L5 5.5L7 3.5" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+        </svg>
+      </span>
+    </div>
   );
 }
 
