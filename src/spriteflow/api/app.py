@@ -44,6 +44,7 @@ from ..templates.api import router as templates_router
 from .graphs import router as graphs_router
 from .config import router as config_router
 from .menu import router as menu_router
+from .video_frames import router as video_frames_router
 
 
 @asynccontextmanager
@@ -274,6 +275,7 @@ def create_app() -> FastAPI:
     app.include_router(graphs_router, prefix="/api", tags=["graphs"])
     app.include_router(config_router, prefix="/api", tags=["config"])
     app.include_router(menu_router, prefix="/api", tags=["menu"])
+    app.include_router(video_frames_router, prefix="/api", tags=["video-frames"])
 
     @app.get("/api/health")
     async def health():

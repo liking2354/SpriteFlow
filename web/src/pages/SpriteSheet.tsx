@@ -31,6 +31,7 @@ import {
   fitFramesToCell,
   flipFrameH,
   shiftFrame,
+  scaleFrame,
   cloneFrame,
   exportFramesZip,
   exportFramesGif,
@@ -43,6 +44,7 @@ type VAlign = "bottom" | "middle" | "top";
 /** 帧尺寸统一策略：off=保持各自原尺寸；pad=扩到最大尺寸（居中补透明）；crop=裁到最小尺寸（居中裁剪） */
 type Unify = "off" | "pad" | "crop";
 type Step = 1 | 2 | 3;
+type ProcessingMode = "pixel" | "smooth";
 
 interface FrameState {
   id: number;
@@ -94,7 +96,7 @@ export function SpriteSheetPage() {
   // —— 预览播放 ——
   const [playing, setPlaying] = useState(false);
   const [fps, setFps] = useState(8);
-  const [zoom, setZoom] = useState(4);
+  const ZOOM = 4; // 预览渲染固定倍率（不再显示滑块）
   const [checker, setChecker] = useState(true);
   /** 是否显示居中十字线辅助线（帧缩略图 + 预览画布同步显示） */
   const [crosshair, setCrosshair] = useState(false);
@@ -109,6 +111,9 @@ export function SpriteSheetPage() {
   const [busy, setBusy] = useState<string | null>(null);
   /** 导出固定单帧尺寸：0 = 用原始尺寸（取最大宽高），其它 = 强制 cellW = cellH */
   const [cellSize, setCellSize] = useState<number>(0);
+  /** 处理模式：pixel=像素处理（最近邻，默认），smooth=原图处理（平滑插值） */
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>("pixel");
+  const smooth = processingMode === "smooth";
   /** 大图详情对话框开关 */
   const [previewLightbox, setPreviewLightbox] = useState(false);
 
@@ -120,13 +125,9 @@ export function SpriteSheetPage() {
     setFrames([]);
     try {
       const proxied = `/api/proxy-image?url=${encodeURIComponent(url)}`;
-      let objUrl = url;
-      try {
-        const res = await fetch(proxied);
-        if (res.ok) objUrl = URL.createObjectURL(await res.blob());
-      } catch {
-        /* 退回直链 */
-      }
+      const res = await fetch(proxied);
+      if (!res.ok) throw new Error(`代理请求失败: ${res.status}`);
+      const objUrl = URL.createObjectURL(await res.blob());
       const img = await loadImage(objUrl);
       setImgEl(img);
     } catch (e) {
@@ -257,6 +258,33 @@ export function SpriteSheetPage() {
         f.id === id ? { ...f, frame: flipFrameH(f.frame) } : f
       )
     );
+
+  const [scalePct, setScalePct] = useState(100);
+
+  /** 缩放当前 active 帧（按 scale 倍数） */
+  const scaleCurrent = (scale: number) => {
+    const cur = frames[activeIdx];
+    if (!cur || scale === 1) return;
+    setFrames((fs) =>
+      fs.map((f) =>
+        f.id === cur.id
+          ? { ...f, frame: scaleFrame(f.frame, scale, smooth) }
+          : f
+      )
+    );
+    setScalePct(Math.round(scale * 100));
+  };
+
+  /** 批量缩放所有选中帧 */
+  const batchScaleFrames = (scale: number) => {
+    if (scale === 1) return;
+    setFrames((fs) =>
+      fs.map((f) =>
+        f.selected ? { ...f, frame: scaleFrame(f.frame, scale, smooth) } : f
+      )
+    );
+    setScalePct(Math.round(scale * 100));
+  };
 
   /**
    * 把指定 id 的帧移到目标位置 to。
@@ -449,6 +477,20 @@ export function SpriteSheetPage() {
   };
 
   // ============ 预览动画 ============
+  // 选帧时同步预览位置 + 重置缩放比例
+  useEffect(() => {
+    if (playing) return;
+    const idxInSelected = selectedFrames.findIndex(
+      (f) => f.id === frames[activeIdx]?.id
+    );
+    if (idxInSelected >= 0) setPlayIdx(idxInSelected);
+  }, [activeIdx, frames, selectedFrames, playing]);
+
+  // 切帧时重置等比例缩放滑块
+  useEffect(() => {
+    setScalePct(100);
+  }, [activeIdx]);
+
   useEffect(() => {
     if (!playing || selectedFrames.length === 0) return;
     const timer = setInterval(() => {
@@ -465,14 +507,20 @@ export function SpriteSheetPage() {
     if (!ctx) return;
     const fw = cur?.frame.width ?? 64;
     const fh = cur?.frame.height ?? 64;
-    canvas.width = fw * zoom;
-    canvas.height = fh * zoom;
-    ctx.imageSmoothingEnabled = false;
+    // 画布尺寸固定 = 帧尺寸 × 渲染倍率（不随缩放比例变化）
+    canvas.width = fw * ZOOM;
+    canvas.height = fh * ZOOM;
+    ctx.imageSmoothingEnabled = smooth;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (cur) {
-      ctx.drawImage(cur.frame.canvas, 0, 0, canvas.width, canvas.height);
+      const s = scalePct / 100;
+      const sw = Math.round(fw * ZOOM * s);
+      const sh = Math.round(fh * ZOOM * s);
+      const dx = Math.round((fw * ZOOM - sw) / 2);
+      const dy = Math.round((fh * ZOOM - sh) / 2);
+      ctx.drawImage(cur.frame.canvas, dx, dy, sw, sh);
     }
-  }, [playIdx, selectedFrames, zoom, step]);
+  }, [playIdx, selectedFrames, scalePct, step]);
 
   // ============ 导出 ============
   const withBusy = async (key: string, fn: () => Promise<void>) => {
@@ -490,7 +538,7 @@ export function SpriteSheetPage() {
     frames.filter((f) => f.selected).map((f) => f.frame);
 
   /** 当前导出用的 cell 尺寸选项；0 表示使用原始尺寸 */
-  const cellOpts = cellSize > 0 ? { cellW: cellSize, cellH: cellSize, align: vAlign } : { align: vAlign };
+  const cellOpts = { ...(cellSize > 0 ? { cellW: cellSize, cellH: cellSize } : {}), align: vAlign, smooth };
 
   const handleZip = () =>
     withBusy("zip", async () => {
@@ -504,7 +552,7 @@ export function SpriteSheetPage() {
         orderedSelected(),
         1000 / fps,
         vAlign,
-        cellSize > 0 ? { cellW: cellSize, cellH: cellSize } : {}
+        cellSize > 0 ? { cellW: cellSize, cellH: cellSize, smooth } : { smooth }
       );
       downloadBlob(blob, `${sourceLabel || "sprite"}.gif`);
     });
@@ -1010,13 +1058,21 @@ export function SpriteSheetPage() {
                 <Button
                   size="sm"
                   variant={playing ? "primary" : "outline"}
-                  onClick={() => setPlaying((p) => !p)}
+                  onClick={() => {
+                    if (!playing) {
+                      const idxInSelected = selectedFrames.findIndex(
+                        (f) => f.id === frames[activeIdx]?.id
+                      );
+                      setPlayIdx(idxInSelected >= 0 ? idxInSelected : 0);
+                    }
+                    setPlaying((p) => !p);
+                  }}
                 >
                   {playing ? "⏸" : "▶"}
                 </Button>
               }
             >
-              {/* 预览画布（侧栏宽度有限，做成上下布局） */}
+              {/* 预览画布：始终居中适配，保证动画播放完整可视 */}
               <div
                 className="grid place-items-center rounded-l border border-line overflow-hidden mb-3"
                 style={{
@@ -1030,7 +1086,12 @@ export function SpriteSheetPage() {
                 <div className="relative inline-block">
                   <canvas
                     ref={previewRef}
-                    style={{ maxWidth: "100%", maxHeight: 220, imageRendering: "pixelated", display: "block" }}
+                    style={{
+                      maxWidth: "100%",
+                      maxHeight: 220,
+                      imageRendering: "pixelated",
+                      display: "block",
+                    }}
                   />
                   {crosshair && (
                     <div className="pointer-events-none absolute inset-0">
@@ -1057,34 +1118,20 @@ export function SpriteSheetPage() {
                 </div>
               </div>
 
-              {/* 控制：fps/zoom/checker 紧凑放一行（label inline），节省空间 */}
+              {/* 控制：fps / checker */}
               <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="flex items-center gap-2 text-[11px] text-txt-2">
-                    <span className="w-10 shrink-0 font-mono">{t("spritesheet.fps")}</span>
-                    <input
-                      type="range"
-                      min={1}
-                      max={24}
-                      value={fps}
-                      onChange={(e) => setFps(Number(e.target.value))}
-                      className="flex-1 accent-[var(--acc)]"
-                    />
-                    <span className="w-5 text-right font-mono text-txt-1">{fps}</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-[11px] text-txt-2">
-                    <span className="w-10 shrink-0 font-mono">{t("spritesheet.zoom")}</span>
-                    <input
-                      type="range"
-                      min={1}
-                      max={8}
-                      value={zoom}
-                      onChange={(e) => setZoom(Number(e.target.value))}
-                      className="flex-1 accent-[var(--acc)]"
-                    />
-                    <span className="w-6 text-right font-mono text-txt-1">{zoom}×</span>
-                  </label>
-                </div>
+                <label className="flex items-center gap-2 text-[11px] text-txt-2">
+                  <span className="w-10 shrink-0 font-mono">{t("spritesheet.fps")}</span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={24}
+                    value={fps}
+                    onChange={(e) => setFps(Number(e.target.value))}
+                    className="flex-1 accent-[var(--acc)]"
+                  />
+                  <span className="w-5 text-right font-mono text-txt-1">{fps}</span>
+                </label>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <Switch checked={checker} onChange={setChecker} label={t("spritesheet.checker")} />
@@ -1095,6 +1142,33 @@ export function SpriteSheetPage() {
                       cur: selectedFrames.length ? (playIdx % selectedFrames.length) + 1 : 0,
                       total: selectedFrames.length,
                     })}
+                  </div>
+                </div>
+
+                {/* 处理模式 */}
+                <div className="flex items-center gap-2 pt-0.5">
+                  <span className="text-[11px] text-txt-2 shrink-0">{t("spritesheet.processingMode")}</span>
+                  <div className="flex rounded-s border border-line overflow-hidden ml-auto">
+                    <button
+                      onClick={() => setProcessingMode("pixel")}
+                      className={`px-2.5 h-6 text-[10px] transition-colors ${
+                        processingMode === "pixel"
+                          ? "bg-[var(--acc)] text-white"
+                          : "bg-bg-3 text-txt-2 hover:text-txt-1"
+                      }`}
+                    >
+                      {t("spritesheet.modePixel")}
+                    </button>
+                    <button
+                      onClick={() => setProcessingMode("smooth")}
+                      className={`px-2.5 h-6 text-[10px] transition-colors ${
+                        processingMode === "smooth"
+                          ? "bg-[var(--acc)] text-white"
+                          : "bg-bg-3 text-txt-2 hover:text-txt-1"
+                      }`}
+                    >
+                      {t("spritesheet.modeSmooth")}
+                    </button>
                   </div>
                 </div>
 
@@ -1178,6 +1252,70 @@ export function SpriteSheetPage() {
                       >
                         🗑 {t("spritesheet.deleteFrame")}
                       </button>
+                    </div>
+                    {/* 第四行：等比例缩放 */}
+                    <div className="pt-2 mt-2 border-t border-line">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] text-txt-2">
+                          {t("spritesheet.scaleTitle")}
+                        </span>
+                        <span className="text-[10.5px] text-txt-3 font-mono">
+                          {frames[activeIdx].frame.width}×{frames[activeIdx].frame.height}
+                        </span>
+                      </div>
+                      {/* 滑块 1%~200% */}
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={1}
+                          max={200}
+                          step={1}
+                          value={scalePct}
+                          onChange={(e) => setScalePct(Number(e.target.value))}
+                          className="flex-1 h-1 accent-[var(--acc)]"
+                        />
+                        <span className="text-[10.5px] text-txt-2 font-mono w-10 text-right tabular-nums">
+                          {t("spritesheet.scalePercent", { p: scalePct })}
+                        </span>
+                      </div>
+                      {/* 微调按钮：- / + / 复原 */}
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <button
+                          onClick={() => setScalePct((p) => Math.max(1, p - 5))}
+                          title={t("spritesheet.scaleMinus")}
+                          className="h-6 w-7 rounded-s text-[11px] border border-line bg-bg-3 text-txt-1 hover:text-txt-0 hover:border-[var(--acc)]"
+                        >
+                          {t("spritesheet.scaleMinus")}
+                        </button>
+                        <button
+                          onClick={() => setScalePct((p) => Math.min(200, p + 5))}
+                          title={t("spritesheet.scalePlus")}
+                          className="h-6 w-7 rounded-s text-[11px] border border-line bg-bg-3 text-txt-1 hover:text-txt-0 hover:border-[var(--acc)]"
+                        >
+                          {t("spritesheet.scalePlus")}
+                        </button>
+                        <button
+                          onClick={() => setScalePct(100)}
+                          className="h-6 px-2.5 rounded-s text-[10px] border border-line bg-bg-3 text-txt-2 hover:text-txt-1 hover:border-[var(--acc)]"
+                        >
+                          {t("spritesheet.scaleReset")}
+                        </button>
+                        <button
+                          onClick={() => scaleCurrent(scalePct / 100)}
+                          className="ml-auto h-6 px-3 rounded-s text-[10px] border border-[var(--acc)]/50 bg-[var(--acc)]/10 text-txt-1 hover:bg-[var(--acc)]/20 hover:border-[var(--acc)]"
+                        >
+                          {t("spritesheet.scaleApply")}
+                        </button>
+                      </div>
+                      {/* 批量应用 */}
+                      {hasSelection && (
+                        <button
+                          onClick={() => batchScaleFrames(scalePct / 100)}
+                          className="w-full mt-1.5 h-6 rounded-s text-[10px] border border-line bg-bg-3 text-txt-2 hover:text-txt-1 hover:border-[var(--acc)]"
+                        >
+                          {t("spritesheet.scaleApplySelected")}
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1265,6 +1403,31 @@ export function SpriteSheetPage() {
               />
             </Field>
 
+            <Field label={t("spritesheet.processingMode")}>
+              <div className="flex rounded-s border border-line overflow-hidden">
+                <button
+                  onClick={() => setProcessingMode("pixel")}
+                  className={`flex-1 h-7 text-[11px] transition-colors ${
+                    processingMode === "pixel"
+                      ? "bg-[var(--acc)] text-white"
+                      : "bg-bg-3 text-txt-2 hover:text-txt-1"
+                  }`}
+                >
+                  {t("spritesheet.modePixel")}
+                </button>
+                <button
+                  onClick={() => setProcessingMode("smooth")}
+                  className={`flex-1 h-7 text-[11px] transition-colors ${
+                    processingMode === "smooth"
+                      ? "bg-[var(--acc)] text-white"
+                      : "bg-bg-3 text-txt-2 hover:text-txt-1"
+                  }`}
+                >
+                  {t("spritesheet.modeSmooth")}
+                </button>
+              </div>
+            </Field>
+
             {/* 主操作：保存 / 下载（含格式菜单） */}
             <div className="grid grid-cols-2 gap-2 mt-3">
               <Button
@@ -1302,7 +1465,7 @@ export function SpriteSheetPage() {
             <RecombinePreview
               frames={
                 cellSize > 0
-                  ? fitFramesToCell(orderedSelected(), cellSize, cellSize, vAlign)
+                  ? fitFramesToCell(orderedSelected(), cellSize, cellSize, vAlign, smooth)
                   : orderedSelected()
               }
               cols={layoutCols}
@@ -1318,7 +1481,7 @@ export function SpriteSheetPage() {
         <Lightbox
           frames={
             cellSize > 0
-              ? fitFramesToCell(orderedSelected(), cellSize, cellSize, vAlign)
+              ? fitFramesToCell(orderedSelected(), cellSize, cellSize, vAlign, smooth)
               : orderedSelected()
           }
           cols={layoutCols}

@@ -12,7 +12,6 @@
  * 全部基于浏览器原生 Canvas 2D，像素画场景统一关闭插值。
  */
 import JSZip from "jszip";
-// @ts-expect-error gifenc 无类型声明
 import { GIFEncoder, quantize, applyPalette } from "gifenc";
 
 export interface Frame {
@@ -22,10 +21,11 @@ export interface Frame {
   height: number;
 }
 
-/** 把任意图片源加载成 HTMLImageElement */
+/** 把任意图片源加载成 HTMLImageElement（设置 crossOrigin 防止 canvas 被跨域图片污染） */
 export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("图片加载失败"));
     img.src = src;
@@ -285,6 +285,20 @@ export function flipFrameH(frame: Frame): Frame {
   return { canvas: c, width: frame.width, height: frame.height };
 }
 
+/** 缩放帧内人物/内容（scale 为缩放倍数，1=原尺寸，0.5=一半，2=两倍）。帧宽高不变，内容居中缩放。smooth=true 时启用平滑插值 */
+export function scaleFrame(frame: Frame, scale: number, smooth = false): Frame {
+  if (scale === 1) return frame;
+  const c = newCanvas(frame.width, frame.height);
+  const ctx = ctx2d(c);
+  ctx.imageSmoothingEnabled = smooth;
+  const sw = Math.round(frame.width * scale);
+  const sh = Math.round(frame.height * scale);
+  const dx = Math.round((frame.width - sw) / 2);
+  const dy = Math.round((frame.height - sh) / 2);
+  ctx.drawImage(frame.canvas, dx, dy, sw, sh);
+  return { canvas: c, width: frame.width, height: frame.height };
+}
+
 /** 应用逐帧偏移（dx/dy 像素平移，超出部分裁掉，空出部分透明） */
 export function shiftFrame(frame: Frame, dx: number, dy: number): Frame {
   if (dx === 0 && dy === 0) return frame;
@@ -462,10 +476,12 @@ export function fitFrameToCell(
   frame: Frame,
   cellW: number,
   cellH: number,
-  align: "bottom" | "middle" | "top" = "bottom"
+  align: "bottom" | "middle" | "top" = "bottom",
+  smooth = false
 ): Frame {
   const c = newCanvas(cellW, cellH);
   const ctx = ctx2d(c);
+  ctx.imageSmoothingEnabled = smooth;
   const sx = frame.width / cellW;
   const sy = frame.height / cellH;
   const s = Math.max(sx, sy, 1); // ≥1 表示需要缩小；<1 表示帧更小，则不放大保持原尺寸
@@ -479,14 +495,15 @@ export function fitFrameToCell(
   return { canvas: c, width: cellW, height: cellH };
 }
 
-/** 批量 fit：保证所有帧都是统一的 cellW×cellH */
+/** 批量 fit：保证所有帧都是统一的 cellW×cellH；smooth=true 启用平滑插值 */
 export function fitFramesToCell(
   frames: Frame[],
   cellW: number,
   cellH: number,
-  align: "bottom" | "middle" | "top" = "bottom"
+  align: "bottom" | "middle" | "top" = "bottom",
+  smooth = false
 ): Frame[] {
-  return frames.map((f) => fitFrameToCell(f, cellW, cellH, align));
+  return frames.map((f) => fitFrameToCell(f, cellW, cellH, align, smooth));
 }
 
 function frameToBlob(frame: Frame): Promise<Blob> {
@@ -498,15 +515,15 @@ function frameToBlob(frame: Frame): Promise<Blob> {
   });
 }
 
-/** 导出选定帧为 ZIP（可选 cellSize 强制每张图统一尺寸） */
+/** 导出选定帧为 ZIP（可选 cellSize 强制每张图统一尺寸；smooth 启用平滑插值） */
 export async function exportFramesZip(
   frames: Frame[],
   baseName = "frame",
-  opts: { cellW?: number; cellH?: number; align?: "bottom" | "middle" | "top" } = {}
+  opts: { cellW?: number; cellH?: number; align?: "bottom" | "middle" | "top"; smooth?: boolean } = {}
 ): Promise<Blob> {
   const target =
     opts.cellW && opts.cellH
-      ? fitFramesToCell(frames, opts.cellW, opts.cellH, opts.align ?? "bottom")
+      ? fitFramesToCell(frames, opts.cellW, opts.cellH, opts.align ?? "bottom", opts.smooth ?? false)
       : frames;
   const zip = new JSZip();
   for (let i = 0; i < target.length; i++) {
@@ -529,12 +546,12 @@ export async function exportFramesGif(
   frames: Frame[],
   delayMs = 100,
   align: "bottom" | "middle" | "top" = "bottom",
-  opts: { cellW?: number; cellH?: number } = {}
+  opts: { cellW?: number; cellH?: number; smooth?: boolean } = {}
 ): Promise<Blob> {
   if (frames.length === 0) throw new Error("没有可导出的帧");
   const unified =
     opts.cellW && opts.cellH
-      ? fitFramesToCell(frames, opts.cellW, opts.cellH, align)
+      ? fitFramesToCell(frames, opts.cellW, opts.cellH, align, opts.smooth ?? false)
       : unifyFrames(frames, align);
   const maxW = unified[0].width;
   const maxH = unified[0].height;
@@ -586,12 +603,12 @@ export async function exportFramesGif(
 export async function recombineFrames(
   frames: Frame[],
   layoutCols: number,
-  opts: { cellW?: number; cellH?: number; align?: "bottom" | "middle" | "top" } = {}
+  opts: { cellW?: number; cellH?: number; align?: "bottom" | "middle" | "top"; smooth?: boolean } = {}
 ): Promise<Blob> {
   if (frames.length === 0) throw new Error("没有可合成的帧");
   const target =
     opts.cellW && opts.cellH
-      ? fitFramesToCell(frames, opts.cellW, opts.cellH, opts.align ?? "bottom")
+      ? fitFramesToCell(frames, opts.cellW, opts.cellH, opts.align ?? "bottom", opts.smooth ?? false)
       : frames;
   const cols = Math.max(1, Math.floor(layoutCols));
   const rows = Math.ceil(target.length / cols);

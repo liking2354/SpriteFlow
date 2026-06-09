@@ -15,6 +15,7 @@ import { TemplatesPage } from "@/pages/Templates";
 import { GraphPage } from "@/pages/Graph";
 import { GraphListPage } from "@/pages/GraphList";
 import { GraphEditorPage } from "@/pages/GraphEditor";
+import { VideoFramesPage } from "@/pages/VideoFrames";
 
 export function App() {
   const hydrate = useThemeStore((s) => s.hydrate);
@@ -40,6 +41,7 @@ export function App() {
         <Route path="/graphs/:graphId/edit" element={<GraphEditorPage />} />
         <Route path="/graphs/new" element={<GraphEditorPage />} />
         <Route path="/graph" element={<GraphPage />} />
+        <Route path="/video-frames" element={<VideoFramesPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>

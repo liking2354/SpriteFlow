@@ -28,6 +28,13 @@ import type {
   GraphRunStatus,
   GraphRerunResponse,
   GraphRunListItem,
+  VFCreateJobResponse,
+  VFJobResponse,
+  VFIndexData,
+  VFProbeResponse,
+  VFFramesList,
+  VFCropParams,
+  VFCropResponse,
 } from "./types";
 
 const BASE = "/api";
@@ -392,6 +399,85 @@ export const api = {
   /** 获取图的最近一次运行结果（用于页面重进时恢复展示） */
   getGraphLatestRunResults: (graphId: string) =>
     request<import("./types").GraphLatestRunResults>(`/graphs/${graphId}/latest-run-results`),
+
+  // ===== Video Frames (视频序列帧) =====
+  /** 上传视频探测元数据 */
+  probeVideo: async (file: File): Promise<VFProbeResponse> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${BASE}/video-frames/probe`, { method: "POST", body: fd });
+    if (!res.ok) throw new Error(`probe failed: ${res.status}`);
+    return res.json();
+  },
+  /** 创建抽帧任务 */
+  createVFJob: async (file: File, params: {
+    fps?: number; max_frames?: number;
+    start_sec?: number; end_sec?: number;
+    spacing?: number; layout_mode?: string; columns?: number;
+  }): Promise<VFCreateJobResponse> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("fps", String(params.fps ?? 8));
+    fd.append("max_frames", String(params.max_frames ?? 16));
+    if (params.start_sec) fd.append("start_sec", String(params.start_sec));
+    if (params.end_sec) fd.append("end_sec", String(params.end_sec));
+    fd.append("spacing", String(params.spacing ?? 4));
+    fd.append("layout_mode", params.layout_mode ?? "auto_square");
+    fd.append("columns", String(params.columns ?? 8));
+    const res = await fetch(`${BASE}/video-frames/jobs`, { method: "POST", body: fd });
+    if (!res.ok) throw new Error(`create failed: ${res.status}`);
+    return res.json();
+  },
+  /** 查询抽帧任务 */
+  getVFJob: (jobId: string) => request<VFJobResponse>(`/video-frames/jobs/${jobId}`),
+  /** 获取抽帧结果索引 JSON */
+  getVFIndex: async (jobId: string): Promise<VFIndexData> => {
+    const res = await fetch(`${BASE}/video-frames/jobs/${jobId}/index`);
+    if (!res.ok) throw new Error(`get index failed: ${res.status}`);
+    return res.json();
+  },
+  /** 获取抽帧结果下载 URL（拼接到 BASE） */
+  getVFResultUrl: (jobId: string, format = "png") => `${BASE}/video-frames/jobs/${jobId}/result?format=${format}`,
+  /** 删除抽帧任务 */
+  deleteVFJob: (jobId: string) => request<{ ok: boolean }>(`/video-frames/jobs/${jobId}`, { method: "DELETE" }),
+  /** 获取抽帧任务的单帧文件列表 */
+  getVFFrames: (jobId: string) => request<VFFramesList>(`/video-frames/jobs/${jobId}/frames`),
+  /** 获取单帧图片 URL */
+  getVFFrameUrl: (jobId: string, filename: string) => `${BASE}/video-frames/jobs/${jobId}/frames/${filename}`,
+  /** 裁剪帧并重新合成 */
+  cropVFJob: async (jobId: string, crop: VFCropParams): Promise<VFCropResponse> => {
+    const q = new URLSearchParams({
+      left: String(crop.left), top: String(crop.top),
+      right: String(crop.right), bottom: String(crop.bottom),
+    });
+    const res = await fetch(`${BASE}/video-frames/jobs/${jobId}/crop?${q}`, { method: "POST" });
+    if (!res.ok) throw new Error(`crop failed: ${res.status}`);
+    return res.json();
+  },
+
+  /** AI 抠图单张图片 */
+  matteImage: async (file: File): Promise<Blob> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${BASE}/video-frames/matte`, { method: "POST", body: fd });
+    if (!res.ok) throw new Error(`matte failed: ${res.status}`);
+    return res.blob();
+  },
+
+  /** 创建水印去除任务 */
+  createWatermarkJob: async (file: File): Promise<VFCreateJobResponse> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${BASE}/video-frames/watermark`, { method: "POST", body: fd });
+    if (!res.ok) throw new Error(`watermark failed: ${res.status}`);
+    return res.json();
+  },
+  /** 查询水印任务 */
+  getWatermarkJob: (jobId: string) => request<VFJobResponse>(`/video-frames/watermark/${jobId}`),
+  /** 获取去水印结果下载 URL */
+  getWatermarkResultUrl: (jobId: string) => `${BASE}/video-frames/watermark/${jobId}/result`,
+  /** 删除水印任务 */
+  deleteWatermarkJob: (jobId: string) => request<{ ok: boolean }>(`/video-frames/watermark/${jobId}`, { method: "DELETE" }),
 };
 
 /** SSE 订阅 sequential 流式生成 */

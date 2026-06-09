@@ -69,16 +69,17 @@ const APIPersistence: MenuPersistence = {
 
 // ---- 默认项 ----
 const DEFAULT_ITEMS: MenuItem[] = [
-  { id: "generate",    to: "/",            i18nKey: "nav.generate",    section: "generate", visible: true, order: 0 },
-  { id: "video",       to: "/video",       i18nKey: "nav.video",       section: "generate", visible: true, order: 1 },
-  { id: "editor",      to: "/editor",      i18nKey: "nav.editor",      section: "generate", visible: true, order: 2 },
-  { id: "spritesheet", to: "/spritesheet", i18nKey: "nav.spritesheet", section: "generate", visible: true, order: 3 },
-  { id: "workflows",   to: "/workflows",   i18nKey: "nav.workflows",   section: "generate", visible: true, order: 4 },
-  { id: "assets",      to: "/assets",      i18nKey: "nav.assets",      section: "manage",   visible: true, order: 5 },
-  { id: "templates",   to: "/templates",   i18nKey: "nav.templates",   section: "manage",   visible: true, order: 6 },
-  { id: "graph",       to: "/graphs",      i18nKey: "nav.graph",       section: "manage",   visible: true, order: 7 },
-  { id: "nodes",       to: "/nodes",       i18nKey: "nav.nodes",       section: "manage",   visible: true, order: 8 },
-  { id: "routing",     to: "/routing",     i18nKey: "nav.routing",     section: "manage",   visible: true, order: 9 },
+  { id: "generate",     to: "/",              i18nKey: "nav.generate",     section: "generate", visible: true, order: 0 },
+  { id: "video",        to: "/video",        i18nKey: "nav.video",        section: "generate", visible: true, order: 1 },
+  { id: "editor",       to: "/editor",       i18nKey: "nav.editor",       section: "generate", visible: true, order: 2 },
+  { id: "spritesheet",  to: "/spritesheet",  i18nKey: "nav.spritesheet",  section: "generate", visible: true, order: 3 },
+  { id: "videoFrames",  to: "/video-frames", i18nKey: "nav.videoFrames",  section: "generate", visible: true, order: 4 },
+  { id: "workflows",    to: "/workflows",    i18nKey: "nav.workflows",    section: "generate", visible: true, order: 5 },
+  { id: "assets",       to: "/assets",       i18nKey: "nav.assets",       section: "manage",   visible: true, order: 6 },
+  { id: "templates",    to: "/templates",    i18nKey: "nav.templates",    section: "manage",   visible: true, order: 7 },
+  { id: "graph",        to: "/graphs",       i18nKey: "nav.graph",        section: "manage",   visible: true, order: 8 },
+  { id: "nodes",        to: "/nodes",        i18nKey: "nav.nodes",        section: "manage",   visible: true, order: 9 },
+  { id: "routing",      to: "/routing",      i18nKey: "nav.routing",      section: "manage",   visible: true, order: 10 },
 ];
 
 // ---- 切换开关（未来通过环境变量或配置控制） ----

@@ -732,3 +732,88 @@ export interface GraphRunListItem {
   finishedAt?: string;
   summary?: GraphRunSummary | null;
 }
+
+// ============================ 视频序列帧 ============================
+
+export type VFJobStatus = "processing" | "completed" | "failed";
+
+export interface VFExtractParams {
+  fps: number;
+  max_frames: number;
+  start_sec: number;
+  end_sec: number;
+  spacing: number;
+  layout_mode: string;
+  columns: number;
+}
+
+export interface VFJobResult {
+  sprite_path?: string;
+  index_path?: string;
+  frame_count?: number;
+  frame_size?: { w: number; h: number };
+  sheet_size?: { w: number; h: number };
+  output?: string;
+}
+
+export interface VFJobResponse {
+  id: string;
+  status: VFJobStatus;
+  progress: number;
+  params?: VFExtractParams;
+  error?: { message?: string } | null;
+  result?: VFJobResult | null;
+}
+
+export interface VFCreateJobResponse {
+  job_id: string;
+  status: string;
+}
+
+export interface VFIndexData {
+  version: string;
+  frame_size: { w: number; h: number };
+  sheet_size: { w: number; h: number };
+  frames: Array<{
+    i: number;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    t: number;
+  }>;
+}
+
+/** 视频探针响应 */
+export interface VFProbeResponse {
+  duration: number;
+  width: number;
+  height: number;
+  original_fps: number;
+  frame_count: number;
+  filename: string;
+  size_mb: number;
+}
+
+/** 帧文件列表 */
+export interface VFFramesList {
+  frames: Array<{ name: string; url: string }>;
+  frame_count: number;
+}
+
+/** 裁剪参数 */
+export interface VFCropParams {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** 裁剪响应 */
+export interface VFCropResponse {
+  status: string;
+  frame_size: { w: number; h: number };
+  sheet_size: { w: number; h: number };
+  frame_count: number;
+  crop: VFCropParams;
+}
