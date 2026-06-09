@@ -15,8 +15,6 @@ class PipelineNodeModel(BaseModel):
       CharacterMaster  → 角色母版（template_ids → text2img → remove_bg → align）
       DirectionVariant → 方向变体（upstream image + direction templates → img2img）
       AnimationSprite  → 动画精灵（upstream image + action templates → sequential/images）
-      SkillVFX         → 技能特效（optional upstream image + vfx templates → sequential/text2img）
-      ImageFusion      → 图像融合（upstream images + fusion template → multi_image_fusion）
     """
 
     id: str = Field(..., description="画布内唯一 ID")

@@ -9,6 +9,7 @@ import { NodePalette } from "@/components/graph/NodePalette";
 import { RunSummary } from "@/components/graph/RunSummary";
 import { ExecutionLog } from "@/components/graph/ExecutionLog";
 import { PresetPipelines } from "@/components/graph/PresetPipelines";
+import { ParamPanel } from "@/components/graph/ParamPanel";
 import { Button } from "@/components/ui/Button";
 import { useGraphRun } from "@/components/graph/useGraphRun";
 import type { PipelineGraphModel, PipelineNodeParams } from "@/api/types";
@@ -49,6 +50,8 @@ export function GraphEditorPage() {
   const [showRunSummary, setShowRunSummary] = useState(false);
   const [summaryDismissed, setSummaryDismissed] = useState(false);
   const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
+  /** 底部控制台日志是否强制展开（手动切换） */
+  const [consoleOpen, setConsoleOpen] = useState(false);
 
   // 加载已有图
   useEffect(() => {
@@ -58,7 +61,6 @@ export function GraphEditorPage() {
         setGraphName(g.name);
         setGraphDesc(g.description);
         setSavedId(g.id);
-        // 恢复最近一次运行结果，让 ImageViewer 等展示节点显示上次产出
         restoreLatestRun(graphId);
       }).catch((e) => {
         console.error("Load graph failed", e);
@@ -124,7 +126,6 @@ export function GraphEditorPage() {
       } else {
         await api.createGraph(g);
         setSavedId(g.id);
-        // 新建后更新 URL
         navigate(`/graphs/${g.id}/edit`, { replace: true });
       }
     } catch (e) {
@@ -160,18 +161,15 @@ export function GraphEditorPage() {
   }, [graph, graphName, graphDesc, savedId, run, navigate]);
 
   const handleRerun = useCallback(async (nodeId: string, mode?: string) => {
-    // 已有运行记录 → 尝试使用 rerun 重跑
     if (runState.runId) {
       try {
         await rerun(runState.runId, nodeId, mode);
         return;
       } catch (e: any) {
         console.warn("Rerun node failed, falling back to cold-start:", e?.message);
-        // 中断重连 SSE（如果 rerun 部分失败导致残留）
         reset();
       }
     }
-    // 冷启动：runId 为空或 rerun 失败 → 创建新运行，仅执行此节点
     try {
       await runSingleNode(savedId, nodeId);
     } catch (e) {
@@ -179,27 +177,9 @@ export function GraphEditorPage() {
     }
   }, [runState.runId, rerun, runSingleNode, savedId, reset]);
 
-  const handleThumbnailClick = useCallback((nodeId: string) => {
-    setPreviewNodeId(nodeId);
-  }, []);
-
-  // 解析预览节点 ID → 实际 config 节点 ID（display 节点需要映射）
-  const previewConfigNodeId = useMemo(() => {
-    if (!previewNodeId) return null;
-    // 在图中查找是否 display 节点
-    const node = graph.nodes.find((n) => n.id === previewNodeId);
-    if (node && (node.type === "ImageViewer" || node.type === "GalleryViewer")) {
-      const fromUi = (node.ui as Record<string, unknown> | undefined)?.["config_node_id"] as string;
-      if (fromUi) return fromUi;
-      // 如果 ui 中 config_node_id 为空，从入边自动推导
-      const incomingEdge = graph.edges.find(e => e.dst_node === previewNodeId);
-      if (incomingEdge) return incomingEdge.src_node;
-      return null;
-    }
-    return previewNodeId;
-  }, [previewNodeId, graph.nodes, graph.edges]);
-  const previewUrl = previewConfigNodeId
-    ? runState.nodeStatuses[previewConfigNodeId]?.url ?? null
+  // 预览 URL
+  const previewUrl = previewNodeId
+    ? runState.nodeStatuses[previewNodeId]?.url ?? null
     : null;
 
   // 返回列表
@@ -245,22 +225,20 @@ export function GraphEditorPage() {
     [graph.nodes]
   );
 
+  const selectedNode = useMemo(
+    () => (selectedNodeId ? graph.nodes.find((n) => n.id === selectedNodeId) ?? null : null),
+    [selectedNodeId, graph.nodes],
+  );
+  const showParamPanel = !!selectedNode;
+
+  // 底部日志控制台显示条件：运行中 || 有节点状态 || 手动打开
+  const hasNodeActivity = Object.keys(runState.nodeStatuses).length > 0;
+  const showConsole = runState.isRunning || hasNodeActivity || consoleOpen;
+
   return (
     <div className="flex h-full">
-      {/* 左侧：节点面板 + 执行日志 */}
-      <div
-        className="w-[220px] shrink-0 border-r flex flex-col"
-        style={{ borderColor: "var(--line)", background: "var(--bg-1)" }}
-      >
-        <NodePalette />
-        <div className="flex-1 min-h-0">
-          <ExecutionLog
-            nodeStatuses={runState.nodeStatuses}
-            nodeLabels={nodeLabels}
-            isRunning={runState.isRunning}
-          />
-        </div>
-      </div>
+      {/* 左侧：可收缩节点菜单 */}
+      <NodePalette />
 
       {/* 中间/右侧：画布全高 */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -292,6 +270,28 @@ export function GraphEditorPage() {
             <ToggleButton active={showControls} onClick={() => setShowControls((v) => !v)}>{t("graph.controls")}</ToggleButton>
             <ToggleButton active={showMiniMap} onClick={() => setShowMiniMap((v) => !v)}>{t("graph.map")}</ToggleButton>
           </div>
+
+          {/* 日志控制台切换按钮 */}
+          <button
+            type="button"
+            onClick={() => setConsoleOpen((v) => !v)}
+            className="relative h-7 px-2 rounded-md text-[10px] border transition-colors"
+            style={{
+              borderColor: hasNodeActivity ? "var(--acc)" : "var(--line)",
+              color: hasNodeActivity ? "var(--acc)" : "var(--txt-3)",
+              background: hasNodeActivity ? "rgba(99,102,241,0.10)" : "transparent",
+            }}
+            title={t("graph.toggleConsole", "切换日志控制台")}
+          >
+            {runState.isRunning && <span className="animate-spin mr-1">⏳</span>}
+            {t("graph.console", "日志")}
+            {hasNodeActivity && (
+              <span className="ml-1 text-[9px] px-1 py-px rounded-full" style={{ background: "#ffffff15", color: "var(--txt-3)" }}>
+                {Object.keys(runState.nodeStatuses).length}
+              </span>
+            )}
+          </button>
+
           <Button size="sm" onClick={handleSave} loading={isSaving}>
             {savedId ? t("graph.update", "更新") : t("common.save")}
           </Button>
@@ -357,31 +357,53 @@ export function GraphEditorPage() {
           </div>
         )}
 
-        {/* 画布 — 全高 */}
-        <div className="flex-1 min-h-0">
-          <ReactFlowProvider>
-            <PipelineCanvas
-              graph={graph}
-              onChange={handleGraphChange}
-              onSelectNode={handleNodeSelect}
-              selectedNodeId={selectedNodeId}
-              nodeStatuses={runState.nodeStatuses}
-              onNodeParamsChange={handleNodeParamsChange}
-              onCollapsedChange={handleNodeCollapsedChange}
-              showMiniMap={showMiniMap}
-              showControls={showControls}
-              showBackground={showBackground}
-              onSaveShortcut={handleSave}
-              onRunShortcut={handleRun}
-              onRerunNode={handleRerun}
-              onThumbnailClick={handleThumbnailClick}
-              initialViewport={
-                graph.viewport && typeof (graph.viewport as Record<string, unknown>).zoom === "number"
-                  ? graph.viewport as { x: number; y: number; zoom: number }
-                  : null
-              }
-            />
-          </ReactFlowProvider>
+        {/* 画布 + 底部日志控制台 */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 min-h-0">
+            <ReactFlowProvider>
+              <PipelineCanvas
+                graph={graph}
+                onChange={handleGraphChange}
+                onSelectNode={handleNodeSelect}
+                selectedNodeId={selectedNodeId}
+                nodeStatuses={runState.nodeStatuses}
+                onNodeParamsChange={handleNodeParamsChange}
+                onCollapsedChange={handleNodeCollapsedChange}
+                showMiniMap={showMiniMap}
+                showControls={showControls}
+                showBackground={showBackground}
+                onSaveShortcut={handleSave}
+                onRunShortcut={handleRun}
+                onRerunNode={handleRerun}
+                initialViewport={
+                  graph.viewport && typeof (graph.viewport as Record<string, unknown>).zoom === "number"
+                    ? graph.viewport as { x: number; y: number; zoom: number }
+                    : null
+                }
+              />
+            </ReactFlowProvider>
+          </div>
+
+          {/* 底部：日志控制台抽屉 */}
+          {showConsole && (
+            <div
+              className="border-t shrink-0 transition-all duration-200"
+              style={{
+                borderColor: "var(--line)",
+                background: "rgba(8,8,20,0.95)",
+                backdropFilter: "blur(8px)",
+                maxHeight: "40%",
+              }}
+            >
+              <ExecutionLog
+                nodeStatuses={runState.nodeStatuses}
+                nodeLabels={nodeLabels}
+                isRunning={runState.isRunning}
+                defaultCollapsed={!consoleOpen && !runState.isRunning}
+                onClear={() => setConsoleOpen(false)}
+              />
+            </div>
+          )}
         </div>
 
         {/* 运行摘要面板 */}
@@ -403,7 +425,7 @@ export function GraphEditorPage() {
             <div className="relative max-w-[90vw] max-h-[90vh]">
               <img
                 src={previewUrl}
-                alt={`${previewConfigNodeId} output`}
+                alt="preview"
                 className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
               />
               <button
@@ -414,12 +436,26 @@ export function GraphEditorPage() {
                 ×
               </button>
               <div className="absolute bottom-2 left-2 px-2 py-1 rounded text-[11px] bg-black/60 text-white/80">
-                {previewConfigNodeId}
+                {previewNodeId}
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* 右侧：参数面板 */}
+      {showParamPanel && selectedNode && (
+        <div
+          className="w-[280px] shrink-0 border-l"
+          style={{ borderColor: "var(--line)", background: "var(--bg-1)" }}
+        >
+          <ParamPanel
+            nodeType={selectedNode.type}
+            params={(selectedNode.params as PipelineNodeParams) ?? {}}
+            onChange={(params) => handleNodeParamsChange(selectedNode.id, params)}
+          />
+        </div>
+      )}
     </div>
   );
 }

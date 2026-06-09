@@ -20,6 +20,10 @@ interface ExecutionLogProps {
   nodeLabels: Record<string, string>;
   /** 是否正在运行 */
   isRunning: boolean;
+  /** 默认是否折叠（底部控制台模式下默认折叠） */
+  defaultCollapsed?: boolean;
+  /** 清除日志时回调 */
+  onClear?: () => void;
 }
 
 let _logCounter = 0;
@@ -40,13 +44,18 @@ const STATUS_COLORS: Record<string, string> = {
   failed: "#ef4444",
 };
 
-export function ExecutionLog({ nodeStatuses, nodeLabels, isRunning }: ExecutionLogProps) {
+export function ExecutionLog({ nodeStatuses, nodeLabels, isRunning, defaultCollapsed = false, onClear }: ExecutionLogProps) {
   const { t } = useTranslation();
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [expandedEntries, setExpandedEntries] = useState<Set<number>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   const prevRef = useRef<Record<string, string>>({}); // nodeId → status
+
+  // 监听 defaultCollapsed 变化（父组件切换时同步）
+  useEffect(() => {
+    setCollapsed(defaultCollapsed);
+  }, [defaultCollapsed]);
 
   // 检测节点状态变化 → 生成日志
   useEffect(() => {
@@ -79,20 +88,17 @@ export function ExecutionLog({ nodeStatuses, nodeLabels, isRunning }: ExecutionL
     }
   }, [logs]);
 
-  // 重置日志
+  // 新运行开始时清空旧日志
   useEffect(() => {
-    if (!isRunning && logs.length > 0 && !Object.values(nodeStatuses).some((s) => s.status === "running" || s.status === "pending")) {
-      // 运行结束 3 秒后自动清除
-      const timer = setTimeout(() => {
-        prevRef.current = {};
-        setLogs([]);
-      }, 5000);
-      return () => clearTimeout(timer);
+    if (isRunning) {
+      prevRef.current = {};
+      setLogs([]);
+      setExpandedEntries(new Set());
     }
   }, [isRunning]);
 
   return (
-    <div className="flex flex-col" style={{ borderTop: "1px solid var(--line-soft)" }}>
+    <div className="flex flex-col">
       {/* 标题栏 */}
       <button
         type="button"
@@ -116,6 +122,22 @@ export function ExecutionLog({ nodeStatuses, nodeLabels, isRunning }: ExecutionL
           )}
           {isRunning && (
             <span className="animate-spin text-[10px]">⏳</span>
+          )}
+          {!isRunning && logs.length > 0 && (
+            <button
+              type="button"
+              className="ml-auto text-[9px] px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors"
+              style={{ color: "var(--txt-3)" }}
+              onClick={(e) => {
+                e.stopPropagation();
+                prevRef.current = {};
+                setLogs([]);
+                setExpandedEntries(new Set());
+                onClear?.();
+              }}
+            >
+              清除
+            </button>
           )}
         </div>
         <span className="text-[10px]" style={{ color: "var(--txt-3)" }}>
@@ -204,6 +226,35 @@ export function ExecutionLog({ nodeStatuses, nodeLabels, isRunning }: ExecutionL
 
 /** 渲染 inputs 快照为可读格式 */
 function PromptView({ inputs }: { inputs: Record<string, unknown> }) {
+  // 动画精灵节点：展示每个动作的提示词（prompts 数组）
+  const prompts = inputs.prompts as Array<{ name: string; prompt: string }> | undefined;
+  if (prompts && Array.isArray(prompts)) {
+    return (
+      <div className="flex flex-col gap-1">
+        {prompts.map((v, i) => (
+          <div key={i}>
+            <span style={{ color: "#10b981", fontWeight: 600 }}>{v.name}:</span>
+            <span style={{ color: "var(--txt-1)" }}> {v.prompt}</span>
+          </div>
+        ))}
+        {(inputs.template_ids || inputs.slot_values) && (
+          <div className="mt-0.5 pt-0.5" style={{ borderTop: "1px solid #ffffff10" }}>
+            {inputs.template_ids && (
+              <div style={{ color: "var(--txt-3)" }}>
+                template_ids: {JSON.stringify(inputs.template_ids)}
+              </div>
+            )}
+            {inputs.slot_values && (
+              <div style={{ color: "var(--txt-3)" }}>
+                slot_values: {JSON.stringify(inputs.slot_values)}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // 方向变体节点：展示每个变体的名称和提示词
   const variants = inputs.variants as Array<{ name: string; prompt: string }> | undefined;
   if (variants && Array.isArray(variants)) {

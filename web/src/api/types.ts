@@ -136,7 +136,7 @@ export interface JobListResponse {
   total: number;
 }
 
-export type NodeParamWidget = "text" | "textarea" | "number" | "select" | "multi_select" | "size";
+export type NodeParamWidget = "text" | "textarea" | "number" | "select" | "multi_select" | "size" | "toggle";
 
 export interface NodeParamSchema {
   name: string;

@@ -166,11 +166,7 @@ SpriteFlow/
 │   │   ├── save_asset.py     # 保存到资产库
 │   │   ├── character_master.py    # 角色主模板生成
 │   │   ├── direction_variant.py   # 方向变体节点
-│   │   ├── animation_sprite.py    # 动画精灵节点
-│   │   ├── skill_vfx.py      # 技能特效节点
-│   │   ├── image_fusion.py   # 流水线图像融合
-│   │   ├── image_viewer.py   # 单图展示
-│   │   └── gallery_viewer.py # 多图画廊展示
+│   │   └── animation_sprite.py    # 动画精灵节点
 │   ├── providers/            # AI 能力供应商
 │   │   ├── router.py         # CapabilityRouter（路由 + 降级）
 │   │   ├── seedream.py       # 火山 ARK Seedream 5.0
@@ -230,8 +226,6 @@ SpriteFlow/
 | **CharacterMaster** | 从模板生成角色基底 |
 | **DirectionVariant** | 生成方向变体（上/下/左/右） |
 | **AnimationSprite** | 从动作模板生成动画帧 |
-| **SkillVFX** | 从特效模板生成特效序列 |
-| **ImageFusion** | 流水线封装融合 |
 
 ---
 

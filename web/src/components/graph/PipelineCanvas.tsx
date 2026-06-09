@@ -22,7 +22,6 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useTranslation } from "react-i18next";
 import { BusinessNode, type BusinessNodeData } from "./BusinessNode";
-import { DisplayNode, type DisplayNodeData } from "./DisplayNode";
 import type {
   PipelineGraphModel,
   PipelineNodeModel,
@@ -33,24 +32,7 @@ import type {
 import { api } from "@/api/client";
 import { useQuery } from "@tanstack/react-query";
 
-const NODE_TYPES = { business: BusinessNode, display: DisplayNode };
-
-/** 展示节点类型集合 */
-const DISPLAY_TYPES = new Set(["ImageViewer", "GalleryViewer"]);
-
-/** 展示节点 schema（用于端口校验和调色板） */
-const DISPLAY_SCHEMAS: Record<string, NodeSchema> = {
-  ImageViewer: {
-    type: "ImageViewer", label: "图片查看", icon: "🖼️", color: "#22c55e",
-    category: "display", description: "展示上游单张生成结果图片",
-    inputs: { image: "IMAGE" }, outputs: {}, params: [],
-  },
-  GalleryViewer: {
-    type: "GalleryViewer", label: "图库查看", icon: "🖼️", color: "#22c55e",
-    category: "display", description: "展示上游批量生成结果（方向/动作/特效序列帧）",
-    inputs: { images: "IMAGE_BATCH" }, outputs: {}, params: [],
-  },
-};
+const NODE_TYPES = { business: BusinessNode };
 
 const NODE_DEFAULTS: Record<string, Partial<PipelineNodeParams>> = {
   CharacterMaster: { template_ids: "", slot_values: {}, size: "2k" },
@@ -82,8 +64,6 @@ interface PipelineCanvasProps {
   onRunShortcut?: () => void;
   /** 重新运行指定节点（可选 mode: node_and_downstream|node_only|downstream_only） */
   onRerunNode?: (nodeId: string, mode?: string) => void;
-  /** 点击节点缩略图 */
-  onThumbnailClick?: (nodeId: string) => void;
 }
 
 let _globalNodeCounter = 0;
@@ -116,7 +96,6 @@ export function PipelineCanvas({
   onSaveShortcut,
   onRunShortcut,
   onRerunNode,
-  onThumbnailClick,
 }: PipelineCanvasProps) {
   const { t } = useTranslation();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -124,7 +103,8 @@ export function PipelineCanvas({
   const [rfNodes, setRfNodes] = useNodesState<Node>([]);
   const [rfEdges, setRfEdges] = useEdgesState<Edge>([]);
   const [searchState, setSearchState] = useState<{ open: boolean; x: number; y: number; query: string }>({ open: false, x: 0, y: 0, query: "" });
-  const [contextMenu, setContextMenu] = useState<{ open: boolean; x: number; y: number; nodeId?: string | null }>({ open: false, x: 0, y: 0, nodeId: null });
+  const [contextMenu, setContextMenu] = useState<{ open: boolean; x: number; y: number; nodeId?: string | null; edgeId?: string | null }>({ open: false, x: 0, y: 0, nodeId: null, edgeId: null });
+  const [edgeType, setEdgeType] = useState<"straight" | "smoothstep" | "bezier">("smoothstep");
   const clipboardRef = useRef<Node[]>([]);
   const schemasQuery = useQuery({
     queryKey: ["node-schemas", "pipeline"],
@@ -133,8 +113,7 @@ export function PipelineCanvas({
   });
   const nodeSchemas = useMemo(() => schemasQuery.data ?? [], [schemasQuery.data]);
   const schemaByType = useMemo(() => {
-    const base = Object.fromEntries(nodeSchemas.map((s) => [s.type, s])) as Record<string, NodeSchema>;
-    return { ...base, ...DISPLAY_SCHEMAS };
+    return Object.fromEntries(nodeSchemas.map((s) => [s.type, s])) as Record<string, NodeSchema>;
   }, [nodeSchemas]);
 
   // ==== Refs for stale-closure prevention ====
@@ -202,8 +181,13 @@ export function PipelineCanvas({
     if (lastGraphKeyRef.current === key) return;
     lastGraphKeyRef.current = key;
 
-    // 确保全局计数器高于图中已有节点 ID 的数字后缀，避免粘贴/新建节点时 ID 冲突
-    for (const n of graph.nodes) {
+    // 过滤掉旧版展示节点（ImageViewer / GalleryViewer），预览已内置到业务节点中
+    const displayTypeSet = new Set(["ImageViewer", "GalleryViewer"]);
+    const displayNodeIds = new Set(graph.nodes.filter(n => displayTypeSet.has(n.type)).map(n => n.id));
+    const validNodes = graph.nodes.filter(n => !displayTypeSet.has(n.type));
+
+    // 确保全局计数器高于图中已有节点 ID 的数字后缀
+    for (const n of validNodes) {
       const m = n.id.match(/-(\d+)$/);
       if (m) {
         const num = parseInt(m[1], 10);
@@ -211,36 +195,7 @@ export function PipelineCanvas({
       }
     }
 
-    // 构建展示节点的入边映射（用于修复缺失的 config_node_id）
-    const edgeUpstreamMap: Record<string, string> = {};
-    for (const e of graph.edges) {
-      const dstNode = graph.nodes.find(n => n.id === e.dst_node);
-      if (dstNode && DISPLAY_TYPES.has(dstNode.type)) {
-        edgeUpstreamMap[e.dst_node] = e.src_node;
-      }
-    }
-
-    const nodes: Node[] = graph.nodes.map((n) => {
-      if (DISPLAY_TYPES.has(n.type)) {
-        const configNodeId = ((n.ui as Record<string, unknown> | undefined)?.["config_node_id"] as string)
-          || edgeUpstreamMap[n.id]
-          || "";
-        const label = n.type === "GalleryViewer" ? "图库查看" : "图片查看";
-        const data: DisplayNodeData = {
-          label,
-          nodeType: n.type as "ImageViewer" | "GalleryViewer",
-          configNodeId,
-          status: "idle",
-          onThumbnailClick,
-        };
-        return {
-          id: n.id,
-          type: "display",
-          position: { x: n.x, y: n.y },
-          data,
-          selected: n.id === selectedNodeId,
-        };
-      }
+    const nodes: Node[] = validNodes.map((n) => {
       const data: BusinessNodeData = {
         label: n.type,
         nodeType: n.type,
@@ -261,17 +216,19 @@ export function PipelineCanvas({
       };
     });
 
-    const edges: Edge[] = graph.edges.map((e) => ({
-      id: e.id,
-      source: e.src_node,
-      target: e.dst_node,
-      sourceHandle: e.src_port,
-      targetHandle: e.dst_port,
-      type: "smoothstep",
-      animated: true,
-      style: { stroke: "var(--acc)", strokeWidth: 2 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: "var(--acc)" },
-    }));
+    const edges: Edge[] = graph.edges
+      .filter((e) => !displayNodeIds.has(e.src_node) && !displayNodeIds.has(e.dst_node))
+      .map((e) => ({
+        id: e.id,
+        source: e.src_node,
+        target: e.dst_node,
+        sourceHandle: e.src_port,
+        targetHandle: e.dst_port,
+        type: edgeType,
+        animated: true,
+        style: { stroke: "var(--acc)", strokeWidth: 2 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: "var(--acc)" },
+      }));
 
     // 在构建节点时合并已有的 nodeStatuses（页面重进恢复上次运行结果）
     const currentStatuses = nodeStatusesRef.current;
@@ -327,9 +284,7 @@ export function PipelineCanvas({
   }, [nodeStatuses, setRfNodes, stableParamChange, stableCollapsedChange]);
 
   /**
-   * 将一个节点合并 nodeStatuses 数据
-   * - 展示节点：从 configNodeId 查找上游结果（thumbnail/url/status）
-   * - 业务节点：更新 status 指示灯
+   * 将一个节点合并 nodeStatuses 数据（直接注入到业务节点）
    */
   function _applyNodeStatus(
     n: Node,
@@ -337,23 +292,6 @@ export function PipelineCanvas({
     spc: (nodeId: string, params: Record<string, unknown>) => void,
     scc: (nodeId: string, collapsed: boolean) => void,
   ): Node {
-    if (n.type === "display") {
-      const dData = n.data as unknown as DisplayNodeData;
-      const st = statuses[dData.configNodeId];
-      if (!st) return n;
-      return {
-        ...n,
-        data: {
-          ...dData,
-          thumbnail: st.thumbnail ?? dData.thumbnail,
-          assetId: st.assetId ?? dData.assetId,
-          url: st.url ?? dData.url,
-          status: (st.status as DisplayNodeData["status"]) ?? "idle",
-          error: st.error ?? null,
-        },
-      };
-    }
-    // 配置节点：仅更新状态灯
     const st = statuses[n.id];
     if (!st) return n;
     const data = n.data as unknown as BusinessNodeData;
@@ -362,6 +300,10 @@ export function PipelineCanvas({
       data: {
         ...data,
         status: (st.status as BusinessNodeData["status"]) ?? "idle",
+        thumbnail: st.thumbnail ?? null,
+        assetId: st.assetId ?? null,
+        url: st.url ?? null,
+        error: st.error ?? null,
         onParamChange: spc,
         onCollapsedChange: scc,
       },
@@ -381,20 +323,6 @@ export function PipelineCanvas({
         tags: graphRef.current?.tags ?? [],
         nodes: nodes.map(
           (n): PipelineNodeModel => {
-            if (n.type === "display") {
-              const d = n.data as unknown as DisplayNodeData;
-              return {
-                id: n.id,
-                type: d.nodeType,
-                x: n.position.x,
-                y: n.position.y,
-                width: n.measured?.width ?? null,
-                height: n.measured?.height ?? null,
-                collapsed: false,
-                params: {} as PipelineNodeParams,
-                ui: { config_node_id: d.configNodeId },
-              };
-            }
             const d = n.data as unknown as BusinessNodeData;
             return {
               id: n.id,
@@ -427,35 +355,7 @@ export function PipelineCanvas({
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       setRfNodes((nds) => {
-        // 检测被删除的节点 ID
-        const removedIds = new Set<string>();
-        for (const c of changes) {
-          if (c.type === "remove") {
-            removedIds.add(c.id);
-          }
-        }
-
         let updated = applyNodeChanges(changes, nds) as Node[];
-
-        // 级联删除：配置节点被删除时，同时移除其配对的展示节点
-        if (removedIds.size > 0) {
-          const cascadeIds = new Set(removedIds);
-          for (const n of updated) {
-            if (n.type === "display") {
-              const dd = n.data as unknown as DisplayNodeData;
-              if (removedIds.has(dd.configNodeId)) {
-                cascadeIds.add(n.id);
-              }
-            }
-          }
-          if (cascadeIds.size > removedIds.size) {
-            updated = updated.filter((n) => !cascadeIds.has(n.id));
-            // 也清理关联的边
-            setRfEdges((eds) =>
-              eds.filter((e) => !cascadeIds.has(e.source) && !cascadeIds.has(e.target))
-            );
-          }
-        }
 
         const shouldEmit = changes.some((c) =>
           c.type === "position" || c.type === "remove"
@@ -468,7 +368,7 @@ export function PipelineCanvas({
         return updated;
       });
     },
-    [setRfNodes, setRfEdges, onChange, buildGraph]
+    [setRfNodes, onChange, buildGraph]
   );
 
   // 边删除 / 重连：同步到 graph
@@ -490,30 +390,9 @@ export function PipelineCanvas({
 
   const createNode = useCallback(
     (nodeType: string, position: { x: number; y: number }): { nodes: Node[]; edges: Edge[] } => {
-      const isDisplay = DISPLAY_TYPES.has(nodeType);
-
-      if (isDisplay) {
-        // 手动创建展示节点（不带配对）
-        const id = `${nodeType.toLowerCase()}-${++_globalNodeCounter}`;
-        const data: DisplayNodeData = {
-          label: nodeType === "GalleryViewer" ? "图库查看" : "图片查看",
-          nodeType: nodeType as "ImageViewer" | "GalleryViewer",
-          configNodeId: "",
-          status: "idle",
-          onThumbnailClick,
-        };
-        return {
-          nodes: [{ id, type: "display", position, data }],
-          edges: [],
-        };
-      }
-
-      // 管线节点：创建配置节点 + 自动配对展示节点
       const schema = schemaByType[nodeType];
       const id = `${nodeType.toLowerCase()}-${++_globalNodeCounter}`;
       const defaults = { ...(NODE_DEFAULTS[nodeType] ?? {}), ...defaultsFromSchema(schema) };
-      const outputs = schema?.outputs ?? {};
-      const hasBatchOutput = Object.values(outputs).some((v) => v === "IMAGE_BATCH" || v === "ANY");
 
       const businessNode: Node = {
         id,
@@ -531,38 +410,9 @@ export function PipelineCanvas({
         } satisfies BusinessNodeData,
       };
 
-      // 自动创建配对展示节点
-      const displayType = hasBatchOutput ? "GalleryViewer" : "ImageViewer";
-      const displayId = `${displayType.toLowerCase()}-${++_globalNodeCounter}`;
-      const displayNode: Node = {
-        id: displayId,
-        type: "display",
-        position: { x: position.x + 320, y: position.y },
-        data: {
-          label: displayType === "GalleryViewer" ? "图库查看" : "图片查看",
-          nodeType: displayType,
-          configNodeId: id,
-          status: "idle",
-          onThumbnailClick,
-        } satisfies DisplayNodeData,
-      };
-
-      const srcPort = hasBatchOutput ? "images" : "image";
-      const edge: Edge = {
-        id: `e-${id}-${displayId}`,
-        source: id,
-        target: displayId,
-        sourceHandle: srcPort,
-        targetHandle: srcPort,
-        type: "smoothstep",
-        animated: true,
-        style: { stroke: "#22c55e", strokeWidth: 1.5, strokeDasharray: "4 3" },
-        markerEnd: { type: MarkerType.ArrowClosed, color: "#22c55e" },
-      };
-
-      return { nodes: [businessNode, displayNode], edges: [edge] };
+      return { nodes: [businessNode], edges: [] };
     },
-    [schemaByType, stableParamChange, stableCollapsedChange, onThumbnailClick]
+    [schemaByType, stableParamChange, stableCollapsedChange]
   );
 
   const getPortType = useCallback(
@@ -596,7 +446,7 @@ export function PipelineCanvas({
         const updated = addEdge(
           {
             ...conn,
-            type: "smoothstep",
+            type: edgeType,
             animated: true,
             style: { stroke: "var(--acc)", strokeWidth: 2 },
             markerEnd: { type: MarkerType.ArrowClosed, color: "var(--acc)" },
@@ -701,35 +551,21 @@ export function PipelineCanvas({
 
   const pasteClipboard = useCallback(() => {
     if (clipboardRef.current.length === 0) return;
-    // 生成新 ID 映射（旧 ID → 新 ID）
     const idMap = new Map<string, string>();
     const pasted: Node[] = clipboardRef.current.map((n) => {
       const oldId = n.id;
-      const d = n.data as unknown as BusinessNodeData | DisplayNodeData;
-      const nodeType = n.type === "display"
-        ? (d as DisplayNodeData).nodeType
-        : (d as BusinessNodeData).nodeType;
-      const newId = `${nodeType.toLowerCase()}-${++_globalNodeCounter}`;
+      const d = n.data as unknown as BusinessNodeData;
+      const newId = `${d.nodeType.toLowerCase()}-${++_globalNodeCounter}`;
       idMap.set(oldId, newId);
-
-      const newData = { ...n.data };
-      // 更新 display 节点的 configNodeId 映射
-      if (n.type === "display") {
-        const dd = newData as unknown as DisplayNodeData;
-        if (dd.configNodeId && idMap.has(dd.configNodeId)) {
-          (newData as unknown as DisplayNodeData).configNodeId = idMap.get(dd.configNodeId)!;
-        }
-      }
       return {
         ...n,
         id: newId,
         position: { x: n.position.x + 40, y: n.position.y + 40 },
         selected: false,
-        data: newData,
+        data: { ...n.data },
       };
     });
 
-    // 复制连线（更新 source/target 为新的 ID）
     const clipboardIds = new Set(clipboardRef.current.map((n) => n.id));
     const pastedEdges: Edge[] = [];
     for (const e of rfEdgesRef.current) {
@@ -768,7 +604,6 @@ export function PipelineCanvas({
         if (reactFlowSelected.length > 0) {
           selectedIds = new Set(reactFlowSelected.map((n) => n.id));
         } else if (selectedNodeIdRef.current) {
-          // React Flow 选中状态尚未同步，回退到 selectedNodeIdRef
           selectedIds = new Set(nds.filter((n) => n.id === selectedNodeIdRef.current).map((n) => n.id));
         } else {
           selectedIds = new Set();
@@ -776,20 +611,9 @@ export function PipelineCanvas({
       }
       if (selectedIds.size === 0) return nds;
 
-      // 级联删除：找出所有展示节点，其 configNodeId 指向任意待删除节点
-      const cascadeIds = new Set(selectedIds);
-      for (const n of nds) {
-        if (n.type === "display") {
-          const dd = n.data as unknown as DisplayNodeData;
-          if (selectedIds.has(dd.configNodeId)) {
-            cascadeIds.add(n.id);
-          }
-        }
-      }
-
-      const updatedNodes = nds.filter((n) => !cascadeIds.has(n.id));
+      const updatedNodes = nds.filter((n) => !selectedIds.has(n.id));
       const updatedEdges = rfEdgesRef.current.filter(
-        (e) => !cascadeIds.has(e.source) && !cascadeIds.has(e.target)
+        (e) => !selectedIds.has(e.source) && !selectedIds.has(e.target)
       );
       setRfEdges(updatedEdges);
       setTimeout(() => onChange(buildGraph(updatedNodes, updatedEdges)), 0);
@@ -812,8 +636,23 @@ export function PipelineCanvas({
   const onNodeContextMenu = useCallback((e: React.MouseEvent, node: Node) => {
     e.preventDefault();
     onSelectNode(node.id);
-    setContextMenu({ open: true, x: e.clientX, y: e.clientY, nodeId: node.id });
+    setContextMenu({ open: true, x: e.clientX, y: e.clientY, nodeId: node.id, edgeId: null });
   }, [onSelectNode]);
+
+  const onEdgeContextMenu = useCallback((e: React.MouseEvent, edge: Edge) => {
+    e.preventDefault();
+    setContextMenu({ open: true, x: e.clientX, y: e.clientY, nodeId: null, edgeId: edge.id });
+  }, []);
+
+  const deleteEdge = useCallback((edgeId: string) => {
+    setRfEdges((eds) => {
+      const updated = eds.filter((e) => e.id !== edgeId);
+      setTimeout(() => {
+        onChange(buildGraph(rfNodesRef.current, updated));
+      }, 0);
+      return updated;
+    });
+  }, [setRfEdges, onChange, buildGraph]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -858,7 +697,7 @@ export function PipelineCanvas({
   );
 
   const allSearchSchemas = useMemo(() => {
-    return [...nodeSchemas, ...Object.values(DISPLAY_SCHEMAS)];
+    return nodeSchemas;
   }, [nodeSchemas]);
 
   const visibleSearchNodes = allSearchSchemas.filter((schema) => {
@@ -904,6 +743,7 @@ export function PipelineCanvas({
         onConnect={onConnect}
         onNodeClick={onNodeClick}
         onNodeContextMenu={onNodeContextMenu}
+        onEdgeContextMenu={onEdgeContextMenu}
         onPaneClick={onPaneClick}
         onDoubleClick={onFlowDoubleClick}
         onPaneContextMenu={onPaneContextMenu}
@@ -917,7 +757,7 @@ export function PipelineCanvas({
         snapGrid={[16, 16]}
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{
-          type: "smoothstep",
+          type: edgeType,
           animated: true,
           style: { stroke: "var(--acc)", strokeWidth: 2 },
           markerEnd: { type: MarkerType.ArrowClosed, color: "var(--acc)" },
@@ -942,10 +782,6 @@ export function PipelineCanvas({
             style={{ background: "#0c0e15", border: "1px solid #1f2433", borderRadius: 8 }}
             maskColor="rgba(0,0,0,0.5)"
             nodeColor={(n: Node) => {
-              if (n.type === "display") {
-                const dd = n.data as unknown as DisplayNodeData | undefined;
-                return DISPLAY_SCHEMAS[dd?.nodeType ?? ""]?.color ?? "#22c55e";
-              }
               const d = n.data as unknown as BusinessNodeData | undefined;
               const type = d?.nodeType;
               return type ? (schemaByType[type]?.color ?? "var(--acc)") : "var(--acc)";
@@ -953,6 +789,31 @@ export function PipelineCanvas({
           />
         )}
       </ReactFlow>
+
+      {/* 连线样式切换 */}
+      <div
+        className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 rounded-lg border px-1.5 py-1"
+        style={{ background: "#0c0e15", borderColor: "#252a3d" }}
+      >
+        <span className="text-[9px] mr-1 uppercase tracking-wider" style={{ color: "var(--txt-3)" }}>
+          连线
+        </span>
+        {(["straight", "smoothstep", "bezier"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            className="px-1.5 py-0.5 rounded text-[10px] transition-colors"
+            style={{
+              background: edgeType === t ? "var(--acc)" : "transparent",
+              color: edgeType === t ? "#fff" : "var(--txt-3)",
+            }}
+            onClick={() => setEdgeType(t)}
+            title={t === "straight" ? "直线" : t === "smoothstep" ? "直角折线" : "贝塞尔曲线"}
+          >
+            {t === "straight" ? "━" : t === "smoothstep" ? "┗" : "⌇"}
+          </button>
+        ))}
+      </div>
 
       {searchState.open && (
         <div
@@ -995,6 +856,14 @@ export function PipelineCanvas({
           className="fixed z-[60] min-w-36 rounded-lg border py-1 shadow-2xl"
           style={{ left: contextMenu.x, top: contextMenu.y, background: "#0c0e15", borderColor: "#252a3d" }}
         >
+          {contextMenu.edgeId && (
+            <>
+              <MenuItem onClick={() => { deleteEdge(contextMenu.edgeId!); setContextMenu((m) => ({ ...m, open: false })); }}>
+                {t("graph.deleteEdge", "删除连线")}
+              </MenuItem>
+              <div style={{ height: 1, background: "#252a3d", margin: "4px 0" }} />
+            </>
+          )}
           {contextMenu.nodeId && onRerunNode && (
             <>
               <MenuItem onClick={() => { onRerunNode(contextMenu.nodeId!); setContextMenu((m) => ({ ...m, open: false })); }}>

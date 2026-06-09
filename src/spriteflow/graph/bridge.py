@@ -25,7 +25,7 @@ NODE_CONTRACTS: dict[str, dict] = {
     },
     "DirectionVariant": {
         "inputs": {"image": "image"},
-        "outputs": {"images": "image_batch", "down": "image", "up": "image", "left": "image", "right": "image"},
+        "outputs": {"image": "image", "images": "image_batch"},
         "required_params": ["template_ids"],
     },
     "AnimationSprite": {
@@ -33,19 +33,11 @@ NODE_CONTRACTS: dict[str, dict] = {
         "outputs": {"images": "image_batch"},
         "required_params": ["template_ids"],
     },
-    "SkillVFX": {
-        "inputs": {"image": "image"},
-        "outputs": {"images": "image_batch"},
-        "required_params": ["template_ids"],
-    },
-    "ImageFusion": {
-        "inputs": {"images": "image_batch"},
-        "outputs": {"image": "image"},
-    },
+
 }
 
-# 允许无输入连线的节点（CharacterMaster 无输入，SkillVFX 的 image 输入为可选）
-_NODES_ALLOWED_NO_INPUT: set[str] = {"CharacterMaster", "SkillVFX", "ImageFusion"}
+# 允许无输入连线的节点（CharacterMaster 无输入）
+_NODES_ALLOWED_NO_INPUT: set[str] = {"CharacterMaster"}
 
 # 纯前端展示节点 — 不在后端执行，校验和 DAG 构建时跳过
 _VISUAL_ONLY_NODES: set[str] = {"ImageViewer", "GalleryViewer"}

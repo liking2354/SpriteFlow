@@ -43,7 +43,7 @@ async def init_presets(force: bool = False) -> dict[str, Any]:
 @router.get("/templates")
 async def list_templates(
     type: str | None = None,
-    limit: int = 20,
+    limit: int = 200,
     offset: int = 0,
 ) -> dict[str, Any]:
     db = _get_db()

@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "id": "g-mq5evq14-6wmjpj",
+  "name": "杰诺斯",
+  "description": "",
+  "spec_id": null,
+  "nodes": [
+    {
+      "id": "charactermaster-1",
+      "type": "CharacterMaster",
+      "x": 80.0,
+      "y": 144.0,
+      "width": 140.0,
+      "height": 141.0,
+      "collapsed": false,
+      "params": {
+        "template_ids": "tmpl_20260608220641881992",
+        "slot_values": {},
+        "size": "2k",
+        "style_prompt": "一拳超人动漫 杰诺斯 赛博朋克风格",
+        "canvas_width": 512,
+        "canvas_height": 512,
+        "target_width": 448,
+        "target_height": 480,
+        "detect_threshold": 32,
+        "padding": 8,
+        "watermark": "false",
+        "output_format": "png"
+      },
+      "ui": {}
+    },
+    {
+      "id": "directionvariant-4",
+      "type": "DirectionVariant",
+      "x": 272.0,
+      "y": 144.0,
+      "width": 140.0,
+      "height": 141.0,
+      "collapsed": false,
+      "params": {
+        "template_ids": "preset_dir_right",
+        "slot_values": {},
+        "size": "2k",
+        "watermark": "false",
+        "output_format": "png"
+      },
+      "ui": {}
+    },
+    {
+      "id": "animationsprite-7",
+      "type": "AnimationSprite",
+      "x": 544.0,
+      "y": -32.0,
+      "width": 140.0,
+      "height": 141.0,
+      "collapsed": false,
+      "params": {
+        "template_ids": "tmpl_20260608235952047427",
+        "slot_values": {},
+        "max_images": 1,
+        "size": "2k",
+        "watermark": "false",
+        "output_format": "png"
+      },
+      "ui": {}
+    },
+    {
+      "id": "animationsprite-10",
+      "type": "AnimationSprite",
+      "x": 544.0,
+      "y": 144.0,
+      "width": 140.0,
+      "height": 141.0,
+      "collapsed": false,
+      "params": {
+        "template_ids": "tmpl_20260609000006289640",
+        "slot_values": {},
+        "max_images": 1,
+        "size": "2k",
+        "watermark": "false",
+        "output_format": "png"
+      },
+      "ui": {}
+    },
+    {
+      "id": "animationsprite-13",
+      "type": "AnimationSprite",
+      "x": 544.0,
+      "y": 304.0,
+      "width": 140.0,
+      "height": 141.0,
+      "collapsed": false,
+      "params": {
+        "template_ids": "tmpl_20260609000022528734",
+        "slot_values": {},
+        "max_images": 1,
+        "size": "2k",
+        "watermark": "false",
+        "output_format": "png"
+      },
+      "ui": {}
+    },
+    {
+      "id": "animationsprite-16",
+      "type": "AnimationSprite",
+      "x": 544.0,
+      "y": 464.0,
+      "width": 140.0,
+      "height": 141.0,
+      "collapsed": false,
+      "params": {
+        "template_ids": "tmpl_20260609000046028043",
+        "slot_values": {},
+        "max_images": 1,
+        "size": "2k",
+        "watermark": "false",
+        "output_format": "png"
+      },
+      "ui": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "xy-edge__charactermaster-1image-directionvariant-4image",
+      "src_node": "charactermaster-1",
+      "src_port": "image",
+      "dst_node": "directionvariant-4",
+      "dst_port": "image"
+    },
+    {
+      "id": "xy-edge__directionvariant-4image-animationsprite-7image",
+      "src_node": "directionvariant-4",
+      "src_port": "image",
+      "dst_node": "animationsprite-7",
+      "dst_port": "image"
+    },
+    {
+      "id": "xy-edge__directionvariant-4image-animationsprite-10image",
+      "src_node": "directionvariant-4",
+      "src_port": "image",
+      "dst_node": "animationsprite-10",
+      "dst_port": "image"
+    },
+    {
+      "id": "xy-edge__directionvariant-4image-animationsprite-13image",
+      "src_node": "directionvariant-4",
+      "src_port": "image",
+      "dst_node": "animationsprite-13",
+      "dst_port": "image"
+    },
+    {
+      "id": "xy-edge__directionvariant-4image-animationsprite-16image",
+      "src_node": "directionvariant-4",
+      "src_port": "image",
+      "dst_node": "animationsprite-16",
+      "dst_port": "image"
+    }
+  ],
+  "viewport": {
+    "x": 2.5,
+    "y": 85.25,
+    "zoom": 0.5
+  },
+  "tags": [],
+  "created_at": "2026-06-09T11:03:02.403967",
+  "updated_at": "2026-06-09T03:03:02.404775+00:00"
+}

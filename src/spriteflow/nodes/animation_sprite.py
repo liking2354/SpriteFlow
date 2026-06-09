@@ -106,7 +106,7 @@ class AnimationSpriteNode(Node):
                     "output_format": output_format,
                     "response_format": "url",
                 }
-                result = await ctx.router.route(Capability.FOUR_VIEW, payload)
+                result = await ctx.router.route(Capability.IMG2IMG, payload)
                 img = result.get("image")
                 images = [img] if img else []
 

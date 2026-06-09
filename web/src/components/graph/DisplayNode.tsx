@@ -97,15 +97,15 @@ export const DisplayNode = memo(function DisplayNode({
         <span style={{ flex: 1 }}>{d.label}</span>
       </div>
 
-      {/* 输入端口 */}
+      {/* 输入端口（上方） */}
       <Handle
         type="target"
-        position={Position.Left}
+        position={Position.Top}
         id={isImageViewer ? "image" : "images"}
         title={`${isImageViewer ? "image" : "images"}: ${isImageViewer ? "IMAGE" : "IMAGE_BATCH"}`}
         className="comfy-handle"
         style={{
-          top: "50%",
+          left: "50%",
           background: accentColor,
           borderColor: accentColor,
         }}

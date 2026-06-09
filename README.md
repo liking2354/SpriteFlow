@@ -168,11 +168,7 @@ SpriteFlow/
 │   │   ├── save_asset.py     # Save to library
 │   │   ├── character_master.py    # Character master generation
 │   │   ├── direction_variant.py   # Direction variant node
-│   │   ├── animation_sprite.py    # Animation sprite node
-│   │   ├── skill_vfx.py      # Skill VFX node
-│   │   ├── image_fusion.py   # Pipeline image fusion
-│   │   ├── image_viewer.py   # Single image display
-│   │   └── gallery_viewer.py # Multi-image gallery display
+│   │   └── animation_sprite.py    # Animation sprite node
 │   ├── providers/            # AI capability providers
 │   │   ├── router.py         # CapabilityRouter (routing + fallback)
 │   │   ├── seedream.py       # Volcano ARK Seedream 5.0
@@ -232,8 +228,6 @@ SpriteFlow/
 | **CharacterMaster** | Generate character base from template |
 | **DirectionVariant** | Generate direction variants (up/down/left/right) |
 | **AnimationSprite** | Generate animation frames from action template |
-| **SkillVFX** | Generate VFX sequence from VFX template |
-| **ImageFusion** | Pipeline wrapper for fusion |
 
 ---
 

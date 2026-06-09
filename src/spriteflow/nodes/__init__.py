@@ -14,8 +14,6 @@ from .pack_spritesheet import PackSpritesheetNode
 from .character_master import CharacterMasterNode
 from .direction_variant import DirectionVariantNode
 from .animation_sprite import AnimationSpriteNode
-from .skill_vfx import SkillVFXNode
-from .image_fusion import ImageFusionNode
 
 # 注册 10 个核心节点
 register_node("LoadAsset", LoadAssetNode)
@@ -33,8 +31,6 @@ register_node("SaveAsset", SaveAssetNode)
 register_node("CharacterMaster", CharacterMasterNode)
 register_node("DirectionVariant", DirectionVariantNode)
 register_node("AnimationSprite", AnimationSpriteNode)
-register_node("SkillVFX", SkillVFXNode)
-register_node("ImageFusion", ImageFusionNode)
 
 __all__ = [
     "LoadAssetNode",
@@ -50,6 +46,4 @@ __all__ = [
     "CharacterMasterNode",
     "DirectionVariantNode",
     "AnimationSpriteNode",
-    "SkillVFXNode",
-    "ImageFusionNode",
 ]

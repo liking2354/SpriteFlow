@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import traceback
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -13,6 +15,8 @@ from .node import create_node, get_node_registry
 from .cache import CacheManager, compute_cache_key
 from .context import Context
 from .types import PortType
+
+_log = logging.getLogger("spriteflow.executor")
 
 
 class RunStatus(str, Enum):
@@ -237,6 +241,11 @@ class Executor:
                 break
             except BaseException as e:
                 last_error = e
+                _log.error(
+                    "节点 '%s' 执行异常 type=%s str=%r repr=%r\n%s",
+                    node_id, type(e).__qualname__, str(e), repr(e),
+                    traceback.format_exc(),
+                )
                 if attempt < self.max_retries:
                     ctx.log(f"节点 '{node_id}' 第 {attempt + 1} 次执行失败，重试中: {e}")
                     await asyncio.sleep(2 ** attempt)
