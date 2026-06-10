@@ -1,7 +1,7 @@
 {
   "common": {
     "appName": "SpriteFlow",
-    "tagline": "2D Game Asset Production Workflow",
+    "tagline": "2D Game Asset Production Pipeline",
     "run": "Run",
     "running": "Running...",
     "submit": "Submit",
@@ -32,7 +32,6 @@
     "editor": "Editor",
     "spritesheet": "Sprite Sheet",
     "videoFrames": "Video Frames",
-    "workflows": "Workflows",
     "assets": "Assets",
     "routing": "Routing",
     "nodes": "Nodes"
@@ -133,35 +132,7 @@
       "best": "Best"
     },
     "tabBasic": "Basic Tools",
-    "tabAI": "AI Tools",
-    "ai": {
-      "subtitle": "Volcengine AI Image Processing",
-      "hint": "Select a capability below to process the current asset. Results are auto-saved to library.",
-      "processing": "AI processing...",
-      "processed": "AI processing completed",
-      "processFailed": "AI processing failed",
-      "resultReady": "AI result generated, view on the right",
-      "resultPreview": "Processing Result",
-      "original": "Original",
-      "result": "Result",
-      "enhance": "Enhance",
-      "enhanceDesc": "Improve image clarity and colors",
-      "inpaint": "Inpaint",
-      "inpaintDesc": "Intelligently remove flaws or objects",
-      "removeBg": "Remove BG",
-      "removeBgDesc": "AI background removal, outputs transparent PNG",
-      "cut": "Smart Crop",
-      "cutDesc": "AI intelligent composition cropping",
-      "outpaint": "Outpaint",
-      "outpaintDesc": "Seamlessly extend image boundaries",
-      "slim": "Slim",
-      "slimDesc": "Compress image size while preserving quality",
-      "resize": "Resize",
-      "resizeDesc": "Intelligently adjust image dimensions",
-      "panelTitle": "AI Capabilities",
-      "selectHint": "Select an AI capability from the left to process this image",
-      "resultSaved": "Result auto-saved to library"
-    }
+    "tabPixel": "Pixel Edit"
   },
   "spritesheet": {
     "title": "Sprite Sheet Tool",
@@ -318,29 +289,6 @@
       "sizeTooSmall": "Seedream requires pixels ≥ 3,686,400"
     },
     "creationsEmpty": "No creations yet — generate your first masterpiece"
-  },
-  "workflows": {
-    "title": "Workflows",
-    "subtitle": "Pick a YAML workflow and execute",
-    "fields": {
-      "yamlPath": "YAML File Path",
-      "yamlPathPlaceholder": "e.g. workflows/example_text2img.yaml"
-    },
-    "samples": "Sample Workflows",
-    "actions": {
-      "run": "Run Workflow"
-    },
-    "result": {
-      "runId": "Run ID",
-      "status": "Status",
-      "nodes": "Node Status",
-      "cacheHit": "Cache Hit",
-      "executed": "Executed",
-      "failed": "Failed",
-      "running": "Running",
-      "pending": "Pending",
-      "completed": "Completed"
-    }
   },
   "assets": {
     "title": "Asset Hub",

@@ -39,10 +39,7 @@ class GraphEdgeModel(BaseModel):
 
 
 class PipelineGraphModel(BaseModel):
-    """完整管线图定义
-
-    等价于 ComfyUI 的 workflow.json。
-    """
+    """完整管线图定义"""
 
     schema_version: int = Field(default=1, description="图格式版本（用于未来迁移）")
     id: str = Field(default_factory=lambda: _short_uuid(), description="图唯一 ID")

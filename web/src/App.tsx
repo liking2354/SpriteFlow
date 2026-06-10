@@ -4,7 +4,6 @@ import { useThemeStore } from "@/stores/theme";
 import { useMenuStore } from "@/stores/menu";
 import { AppShell } from "@/components/layout/AppShell";
 import { GeneratePage } from "@/pages/Generate";
-import { WorkflowsPage } from "@/pages/Workflows";
 import { AssetsPage } from "@/pages/Assets";
 import { RoutingPage } from "@/pages/Routing";
 import { NodesPage } from "@/pages/Nodes";
@@ -30,7 +29,6 @@ export function App() {
       <Routes>
         <Route path="/" element={<GeneratePage />} />
         <Route path="/video" element={<VideoPage />} />
-        <Route path="/workflows" element={<WorkflowsPage />} />
         <Route path="/assets" element={<AssetsPage />} />
         <Route path="/editor" element={<EditorPage />} />
         <Route path="/spritesheet" element={<SpriteSheetPage />} />

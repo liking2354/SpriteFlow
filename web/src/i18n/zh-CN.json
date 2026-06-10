@@ -1,7 +1,7 @@
 {
   "common": {
     "appName": "SpriteFlow",
-    "tagline": "2D 游戏素材生产工作流",
+    "tagline": "2D 游戏素材生产管线",
     "run": "运行",
     "running": "运行中...",
     "submit": "提交",
@@ -32,7 +32,6 @@
     "editor": "素材编辑",
     "spritesheet": "精灵表工具",
     "videoFrames": "视频序列帧",
-    "workflows": "工作流",
     "assets": "素材库",
     "routing": "能力路由",
     "nodes": "节点库",
@@ -140,35 +139,7 @@
       "best": "高精度"
     },
     "tabBasic": "基础工具",
-    "tabAI": "AI 处理",
-    "ai": {
-      "subtitle": "火山引擎 AI 图像处理",
-      "hint": "选择下方能力对当前素材进行 AI 处理，处理结果会自动保存到素材库。",
-      "processing": "AI 处理中...",
-      "processed": "AI 处理完成",
-      "processFailed": "AI 处理失败",
-      "resultReady": "AI 处理结果已生成，可在右侧查看",
-      "resultPreview": "处理结果预览",
-      "original": "原图",
-      "result": "结果",
-      "enhance": "画质增强",
-      "enhanceDesc": "提升图像清晰度与色彩",
-      "inpaint": "擦除修复",
-      "inpaintDesc": "智能去除图片中的瑕疵或物体",
-      "removeBg": "背景移除",
-      "removeBgDesc": "AI 抠图，输出透明 PNG",
-      "cut": "智能裁剪",
-      "cutDesc": "AI 智能构图裁剪",
-      "outpaint": "智能扩图",
-      "outpaintDesc": "无缝扩展图像边界",
-      "slim": "集智瘦身",
-      "slimDesc": "压缩图片体积，保持清晰度",
-      "resize": "图像缩放",
-      "resizeDesc": "智能调整图片尺寸",
-      "panelTitle": "AI 能力",
-      "selectHint": "从左侧选择 AI 能力开始处理",
-      "resultSaved": "结果已自动保存到素材库"
-    }
+    "tabPixel": "精细处理"
   },
   "spritesheet": {
     "title": "精灵表工具",
@@ -325,29 +296,6 @@
       "sizeTooSmall": "Seedream 要求图片像素 ≥ 3,686,400（推荐 2K）"
     },
     "creationsEmpty": "还没有创作记录，开始生成你的第一张作品吧"
-  },
-  "workflows": {
-    "title": "工作流",
-    "subtitle": "选择 YAML 工作流并执行",
-    "fields": {
-      "yamlPath": "YAML 文件路径",
-      "yamlPathPlaceholder": "如 workflows/example_text2img.yaml"
-    },
-    "samples": "示例工作流",
-    "actions": {
-      "run": "运行工作流"
-    },
-    "result": {
-      "runId": "运行 ID",
-      "status": "状态",
-      "nodes": "节点状态",
-      "cacheHit": "缓存命中",
-      "executed": "已执行",
-      "failed": "失败",
-      "running": "执行中",
-      "pending": "等待中",
-      "completed": "已完成"
-    }
   },
   "assets": {
     "title": "素材库",

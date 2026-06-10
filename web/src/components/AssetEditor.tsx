@@ -19,8 +19,9 @@ import { removeBackground } from "@imgly/background-removal";
 import { api } from "@/api/client";
 import type { AssetItem } from "@/api/types";
 import { filerobotZh, filerobotEn } from "@/i18n/filerobot";
+import { PixelEditor } from "@/components/PixelEditor";
 
-type TabType = "basic" | "ai";
+type TabType = "basic" | "pixel";
 
 /** 把任意 URL 转成同源 blob: URL，避免 canvas 跨域污染 */
 async function toLocalObjectUrl(url: string, assetId?: string | null): Promise<string> {
@@ -196,22 +197,6 @@ const FILEROBOT_DARK_PALETTE = {
   device: "#a8b1c4",
 };
 
-/** AI 处理能力定义 */
-const AI_CAPABILITIES: Array<{
-  id: string;
-  icon: string;
-  labelKey: string;
-  descKey: string;
-}> = [
-  { id: "enhance_photo", icon: "✨", labelKey: "editor.ai.enhance", descKey: "editor.ai.enhanceDesc" },
-  { id: "image_inpaint", icon: "🎨", labelKey: "editor.ai.inpaint", descKey: "editor.ai.inpaintDesc" },
-  { id: "remove_bg", icon: "✂️", labelKey: "editor.ai.removeBg", descKey: "editor.ai.removeBgDesc" },
-  { id: "image_cut", icon: "🖼️", labelKey: "editor.ai.cut", descKey: "editor.ai.cutDesc" },
-  { id: "image_outpaint", icon: "🔲", labelKey: "editor.ai.outpaint", descKey: "editor.ai.outpaintDesc" },
-  { id: "slim_image", icon: "📐", labelKey: "editor.ai.slim", descKey: "editor.ai.slimDesc" },
-  { id: "resize_image", icon: "↔️", labelKey: "editor.ai.resize", descKey: "editor.ai.resizeDesc" },
-];
-
 interface SaveResult {
   imageBase64?: string;
   imageData?: { imageBase64?: string; fullName?: string; mimeType?: string; name?: string; extension?: string };
@@ -227,9 +212,28 @@ interface Props {
   onSaved?: (asset: AssetItem) => void;
 }
 
+/** 过滤 react-filerobot-image-editor 库的已知无害警告 */
+const SUPPRESSED_WARNINGS = [
+  "Support for defaultProps will be removed from function components",
+  "React does not recognize the `isAccordion` prop on a DOM element",
+];
+
 export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+
+  // 抑制 filerobot 库的已知无害警告
+  useEffect(() => {
+    const orig = console.error;
+    console.error = (...args: any[]) => {
+      const msg = typeof args[0] === "string" ? args[0] : "";
+      if (SUPPRESSED_WARNINGS.some((w) => msg.includes(w))) return;
+      orig.apply(console, args);
+    };
+    return () => {
+      console.error = orig;
+    };
+  }, []);
 
   const [tab, setTab] = useState<TabType>("basic");
   const [localUrl, setLocalUrl] = useState<string | null>(null);
@@ -240,8 +244,6 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
   const [bgModel, setBgModel] = useState<ImglyModel>("isnet_quint8");
-  const [aiProcessing, setAiProcessing] = useState<string | null>(null);
-  const [aiResultUrl, setAiResultUrl] = useState<string | null>(null);
 
   const filerobotTranslations = useMemo(() => {
     return i18n.language?.startsWith("zh") ? filerobotZh : filerobotEn;
@@ -272,32 +274,6 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
   }, [url, parentAssetId]);
-
-  // AI 处理 mutation
-  const aiProcessMutation = useMutation({
-    mutationFn: async (params: { capability: string; extra?: Record<string, unknown> }) => {
-      if (!parentAssetId) throw new Error("parentAssetId required");
-      return api.aiProcess(parentAssetId, params.capability, params.extra || {});
-    },
-    onSuccess: (asset) => {
-      queryClient.invalidateQueries({ queryKey: ["assets"] });
-      queryClient.invalidateQueries({ queryKey: ["assets-grid"] });
-      // 下载结果图用于预览
-      fetch(`/api/assets/${encodeURIComponent(asset.id)}/raw`)
-        .then((res) => res.ok ? res.blob() : null)
-        .then((blob) => {
-          if (blob) {
-            const newUrl = URL.createObjectURL(blob);
-            setAiResultUrl(newUrl);
-          }
-        });
-      setActionInfo(t("editor.ai.processed", "AI 处理完成"));
-      setTimeout(() => setActionInfo(null), 3000);
-    },
-    onError: (err: Error) => {
-      setActionErr(`${t("editor.ai.processFailed", "AI 处理失败")}: ${err.message}`);
-    },
-  });
 
   const upload = useMutation({
     mutationFn: async ({ file, tag }: { file: File; tag: string }) => {
@@ -357,18 +333,6 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
     }
   };
 
-  const handleAIProcess = (capability: string, extra?: Record<string, unknown>) => {
-    if (!parentAssetId || aiProcessing) return;
-    setAiProcessing(capability);
-    aiProcessMutation.mutate(
-      { capability, extra },
-      {
-        onSuccess: () => setAiProcessing(null),
-        onError: () => setAiProcessing(null),
-      }
-    );
-  };
-
   return (
     <div className="flex flex-col h-full min-h-0 rounded-l overflow-hidden border border-line bg-bg-1">
       {/* 顶部工具条：选项卡切换 */}
@@ -387,19 +351,19 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
           </button>
           <button
             type="button"
-            onClick={() => setTab("ai")}
+            onClick={() => setTab("pixel")}
             className={`px-3 h-7 rounded-s text-[11.5px] transition-colors ${
-              tab === "ai"
+              tab === "pixel"
                 ? "bg-acc text-white"
                 : "text-txt-2 hover:text-txt-1"
             }`}
           >
-            {t("editor.tabAI", "AI 处理")}
+            {t("editor.tabPixel", "精细处理")}
           </button>
         </div>
 
         <span className="text-[12.5px] text-txt-2 ml-3">
-          {tab === "basic" ? t("editor.subtitle") : t("editor.ai.subtitle", "火山引擎 AI 图像处理")}
+          {tab === "basic" ? t("editor.subtitle") : t("editor.pixel.subtitle", "画笔 · 橡皮 · 框选移动")}
         </span>
 
         <div className="ml-auto flex items-center gap-2">
@@ -463,19 +427,6 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
               background: "linear-gradient(90deg, var(--acc), var(--cyan), var(--violet))",
             }}
           />
-        </div>
-      )}
-
-      {/* AI 处理中 / 完成提示 */}
-      {aiProcessing && (
-        <div className="px-4 py-2 bg-[var(--acc)]/10 border-b border-[var(--acc)]/30 text-[12px] text-[var(--acc)] flex items-center gap-2 flex-shrink-0">
-          <span className="animate-pulse">{AI_CAPABILITIES.find(c => c.id === aiProcessing)?.icon}</span>
-          <span>{t(`editor.ai.processing`, "AI 处理中...")}</span>
-        </div>
-      )}
-      {aiResultUrl && !aiProcessing && (
-        <div className="px-4 py-2 bg-[var(--green)]/10 border-b border-[var(--green)]/30 text-[12px] text-[var(--green)] flex items-center gap-2 flex-shrink-0">
-          <span>{t("editor.ai.resultReady", "AI 处理结果已生成，可在右侧查看")}</span>
         </div>
       )}
 
@@ -543,83 +494,28 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
           />
         )}
 
-        {/* AI 处理面板：左侧功能菜单 + 右侧图片预览 */}
-        {tab === "ai" && (
-          <div className="h-full flex overflow-hidden">
-            {/* 左侧：AI 能力菜单 */}
-            <div className="w-[220px] flex-shrink-0 border-r border-line bg-bg-1 flex flex-col overflow-y-auto">
-              <div className="px-3 py-2.5 text-[10.5px] text-txt-3 border-b border-line uppercase tracking-wider">
-                {t("editor.ai.panelTitle", "AI 能力")}
-              </div>
-              <div className="flex-1 py-1.5 space-y-0.5">
-                {AI_CAPABILITIES.map((cap) => (
-                  <button
-                    key={cap.id}
-                    type="button"
-                    onClick={() => handleAIProcess(cap.id)}
-                    disabled={aiProcessing !== null}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-[11.5px] transition-colors ${
-                      aiProcessing === cap.id
-                        ? "bg-[var(--acc)]/15 text-[var(--acc)] border-l-2 border-[var(--acc)]"
-                        : "text-txt-2 hover:text-txt-1 hover:bg-bg-2 border-l-2 border-transparent"
-                    }`}
-                  >
-                    <span className="text-base w-5 text-center flex-shrink-0">{cap.icon}</span>
-                    <div className="min-w-0">
-                      <div className="font-medium text-[12px]">{t(cap.labelKey)}</div>
-                      <div className="text-[10.5px] text-txt-3 leading-tight mt-0.5">{t(cap.descKey)}</div>
-                    </div>
-                    {aiProcessing === cap.id && (
-                      <span className="ml-auto animate-spin text-[10px]">⟳</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 右侧：图片预览区 */}
-            <div className="flex-1 min-w-0 flex flex-col bg-bg-0">
-              {localUrl ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 gap-4 overflow-auto">
-                  {/* 主预览：当前图 or 对比 */}
-                  {aiResultUrl ? (
-                    <div className="w-full max-w-[640px] flex flex-col items-center gap-3">
-                      <div className="grid grid-cols-2 gap-4 w-full">
-                        <div className="flex flex-col items-center gap-1.5">
-                          <span className="text-[10.5px] text-txt-3">{t("editor.ai.original", "原图")}</span>
-                          <div className="w-full aspect-square rounded-lg border border-line bg-bg-3 grid place-items-center overflow-hidden">
-                            <img src={localUrl} alt="original" className="max-w-full max-h-full object-contain" />
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-center gap-1.5">
-                          <span className="text-[10.5px] text-[var(--green)]">✓ {t("editor.ai.result", "结果")}</span>
-                          <div className="w-full aspect-square rounded-lg border border-[var(--green)]/40 bg-bg-3 grid place-items-center overflow-hidden">
-                            <img src={aiResultUrl} alt="result" className="max-w-full max-h-full object-contain" />
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-[10.5px] text-[var(--green)]">
-                        {t("editor.ai.resultSaved", "结果已自动保存到素材库")}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="rounded-lg border border-line bg-bg-3 grid place-items-center overflow-hidden" style={{ maxWidth: "600px", maxHeight: "480px" }}>
-                        <img src={localUrl} alt="preview" className="max-w-full max-h-[480px] object-contain" />
-                      </div>
-                      <span className="text-[11px] text-txt-3">
-                        {t("editor.ai.selectHint", "从左侧选择 AI 能力开始处理")}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex-1 grid place-items-center text-[12px] text-txt-3">
-                  {loadErr ? `${t("editor.loadFailed")}: ${loadErr}` : t("editor.loading")}
-                </div>
-              )}
-            </div>
-          </div>
+        {/* 精细处理面板：像素编辑器 */}
+        {tab === "pixel" && localUrl && (
+          <PixelEditor
+            key={localUrl}
+            src={localUrl}
+            onExport={async (blob) => {
+              const file = new File([blob], "pixel-edited.png", { type: "image/png" });
+              await upload.mutateAsync({ file, tag: "pixel-edited" });
+            }}
+            onReset={() => {
+              setLocalUrl(null);
+              setActionErr(null);
+              (async () => {
+                try {
+                  const objUrl = await toLocalObjectUrl(url, parentAssetId);
+                  setLocalUrl(objUrl);
+                } catch (e) {
+                  setLoadErr(String(e));
+                }
+              })();
+            }}
+          />
         )}
       </div>
     </div>

@@ -1,6 +1,6 @@
 # SpriteFlow
 
-> A node-based workflow platform for 2D game asset production — compose, generate, process, and export.
+> A node-based pipeline platform for 2D game asset production — compose, generate, process, and export.
 
 [中文文档](README_zh-CN.md)
 
@@ -8,7 +8,7 @@
 
 ## Overview
 
-SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image generation, video generation, and image post-processing into automated asset production workflows. It targets **2D game developers** who need to batch-produce sprites, character variants, sprite sheets, and VFX at scale.
+SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image generation, video generation, and image post-processing into automated asset production pipelines. It targets **2D game developers** who need to batch-produce sprites, character variants, sprite sheets, and VFX at scale.
 
 ### Key Capabilities
 
@@ -33,7 +33,7 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
                        │ HTTP / SSE
 ┌──────────────────────▼───────────────────────────────┐
 │                  FastAPI Backend                       │
-│      /api/nodes · /api/workflows · /api/graphs        │
+│      /api/nodes · /api/graphs                       │
 │      /api/generate · /api/assets · /api/videos        │
 │      /api/routing · /api/menu · /api/config           │
 └──────────────────────┬───────────────────────────────┘
@@ -98,13 +98,7 @@ cp .env.example .env
 
 ### 3. Run
 
-**Option A — CLI workflow execution:**
-
-```bash
-uv run spriteflow run workflows/example_text2img.yaml
-```
-
-**Option B — Start API server + frontend dev server:**
+**Start API server + frontend dev server:**
 
 ```bash
 # Terminal 1: Backend
@@ -141,7 +135,7 @@ SpriteFlow/
 │   │   ├── nodes.py          # Node schema listing
 │   │   ├── routing.py        # Capability routing config
 │   │   ├── videos.py         # Video generation tasks
-│   │   └── workflows.py      # YAML workflow execution
+│   │   ├── video_frames.py    # Video frame extraction
 │   ├── asset_hub/            # Asset storage & management
 │   │   ├── db.py             # SQLite CRUD (assets, jobs, configs)
 │   │   ├── ingest.py         # Upload + ingest pipeline
@@ -185,7 +179,7 @@ SpriteFlow/
 │   │   ├── models.py         # Template data models
 │   │   └── seed.py           # Preset templates
 │   ├── config.py             # Settings (env vars)
-│   └── __main__.py           # CLI entry (run/serve)
+│   └── __main__.py           # CLI entry (serve)
 ├── tests/                    # Backend tests (pytest)
 ├── web/                      # Frontend (React + TypeScript)
 │   └── src/
@@ -197,7 +191,6 @@ SpriteFlow/
 │       ├── api/              # API client & types
 │       ├── i18n/             # zh-CN / en-US translations
 │       └── styles/           # Global CSS
-├── workflows/                # YAML workflow definitions
 ├── pyproject.toml
 └── README.md
 ```
@@ -240,24 +233,6 @@ SpriteFlow/
 | **OpenRouter** | text2img, img2img, character_master, four_view | `OPENROUTER_API_KEY` |
 | **Rembg** | remove_bg (local, no key needed) | — |
 | **Volcengine Image** | enhance, inpaint, outpaint, cut, slim, resize, remove_bg | `VOLC_ACCESS_KEY_ID` |
-
----
-
-## Example Workflows
-
-```bash
-# Text-to-Image with background removal
-uv run spriteflow run workflows/example_text2img.yaml
-
-# Image-to-Image style transfer
-uv run spriteflow run workflows/example_img2img.yaml
-
-# Multi-image fusion (outfit change)
-uv run spriteflow run workflows/example_multi_image_fusion.yaml
-
-# 8-direction character sequence
-uv run spriteflow run workflows/example_sequential_8dir.yaml
-```
 
 ---
 

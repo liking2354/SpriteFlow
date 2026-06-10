@@ -23,7 +23,7 @@ class Asset(BaseModel):
     tags: list[str] = Field(default_factory=list)
     parent_id: str | None = None      # 血缘：上游素材 id
     group_id: str | None = None       # 归属分组
-    provenance: dict | None = None    # 生成它的工作流 id + 参数快照
+    provenance: dict | None = None    # 生成它的管线 id + 参数快照
     favorite: bool = False             # 是否收藏
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 

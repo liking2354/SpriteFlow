@@ -22,7 +22,6 @@ import type {
   VideoListResponse,
   VideoStatus,
   VideoTaskItem,
-  WorkflowRunResponse,
   PipelineGraphModel,
   GraphListItem,
   GraphRunStatus,
@@ -208,20 +207,6 @@ export const api = {
     return res.json() as Promise<AssetItem>;
   },
 
-  /** AI 图像处理（火山引擎） */
-  aiProcess: async (assetId: string, capability: string, params: Record<string, unknown> = {}) => {
-    const res = await fetch(`${BASE}/assets/ai-process`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ asset_id: assetId, capability, ...params }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      throw new Error(body?.detail || `${res.status} ${res.statusText}`);
-    }
-    return res.json() as Promise<AssetItem>;
-  },
-
   // Groups
   listGroups: () => request<GroupListResponse>("/groups"),
   createGroup: async (name: string, description = "") => {
@@ -243,7 +228,7 @@ export const api = {
   deleteGroup: (id: string) =>
     request<{ status: string }>(`/groups/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
-  // Nodes / Routing / Workflows
+  // Nodes / Routing
   listNodes: () => request<NodeSchema[]>("/nodes"),
   listNodesByCategory: (category?: string) => request<NodeSchema[]>(`/nodes${category ? `?category=${encodeURIComponent(category)}` : ""}`),
   getRouting: () => request<RoutingResponse>("/routing"),
@@ -262,12 +247,6 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(req),
     }),
-  submitWorkflow: (yamlPath: string) =>
-    request<WorkflowRunResponse>("/workflows", {
-      method: "POST",
-      body: JSON.stringify({ yaml_path: yamlPath }),
-    }),
-  getRun: (runId: string) => request<WorkflowRunResponse>(`/runs/${runId}`),
 
   // Videos
   createVideoTask: (req: VideoCreateInput) =>

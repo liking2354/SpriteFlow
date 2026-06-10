@@ -7,12 +7,6 @@ routes:
   multi_image_fusion: seedream
   sequential_images: seedream
   remove_bg: rembg
-  enhance_photo: volcengine_image
-  image_inpaint: volcengine_image
-  image_cut: volcengine_image
-  image_outpaint: volcengine_image
-  slim_image: volcengine_image
-  resize_image: volcengine_image
   # 视频生成 → 火山方舟 Seedance
   text2video: seedance
   img2video: seedance

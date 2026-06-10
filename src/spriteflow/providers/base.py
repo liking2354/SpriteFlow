@@ -22,13 +22,6 @@ class Capability(str, Enum):
     # 场景路由：按语义场景选择最优模型（通过 OpenRouter）
     CHARACTER_MASTER = "character_master"       # 角色母版生成 → GPT Image2
     FOUR_VIEW = "four_view"                     # 四视图生成 → Seedream 4.5
-    # 火山引擎 AI MediaKit 图像处理能力
-    ENHANCE_PHOTO = "enhance_photo"       # 图像画质增强
-    IMAGE_INPAINT = "image_inpaint"         # 图像擦除修复
-    IMAGE_OUTPAINT = "image_outpaint"       # 智能扩图
-    IMAGE_CUT = "image_cut"                 # 图像智能裁剪
-    SLIM_IMAGE = "slim_image"               # 集智瘦身
-    RESIZE_IMAGE = "resize_image"            # 图像缩放
 
 
 @dataclass

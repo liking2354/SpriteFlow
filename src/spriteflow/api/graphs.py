@@ -36,7 +36,6 @@ from ..graph.bridge import pipeline_graph_to_dag, validate_pipeline_graph
 from ..engine.executor import RunStatus, NodeRunResult
 from ..config import settings
 from .deps import get_executor, get_db
-from ..workflow.yaml_loader import WorkflowLoader
 
 router = APIRouter()
 
@@ -496,7 +495,7 @@ async def rerun_graph_node(run_id: str, node_id: str, mode: str = "node_and_down
         if dag is None:
             raise HTTPException(status_code=400, detail="子图 DAG 生成失败")
 
-        errors = WorkflowLoader.validate(dag)
+        errors = dag.validate()
         if errors:
             raise HTTPException(status_code=400, detail="; ".join(errors))
 
@@ -603,7 +602,7 @@ async def run_single_node(graph_id: str, node_id: str):
         if dag is None:
             return JSONResponse(status_code=400, content={"message": "子图 DAG 为空"})
 
-        errors = WorkflowLoader.validate(dag)
+        errors = dag.validate()
         if errors:
             return JSONResponse(status_code=400, content={
                 "message": "节点校验失败",
@@ -897,7 +896,7 @@ async def _execute_graph(graph: PipelineGraphModel) -> dict:
                 content={"message": "DAG 生成失败：返回空 DAG"},
             )
 
-        errors = WorkflowLoader.validate(dag)
+        errors = dag.validate()
         if errors:
             return JSONResponse(
                 status_code=400,

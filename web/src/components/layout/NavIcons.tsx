@@ -25,9 +25,6 @@ export const navIcons: Record<string, ReactNode> = {
   videoFrames: (
     <svg {...attrs("M22 8l-6-6H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6 M10 9l-2 2 2 2 M14 9l2 2-2 2")} />
   ),
-  workflows: (
-    <svg {...attrs("M4 4h6v6H4zM14 4h2v2h4v4h-2v2h-4v-4h2V6h-2v2H4V4z")} />
-  ),
   assets: (
     <svg {...attrs("M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2z M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M21 15l-5-5L5 21")} />
   ),

@@ -205,19 +205,6 @@ export interface UpdateConfigRequest {
   >;
 }
 
-export interface WorkflowRunResponse {
-  runId: string;
-  status: "pending" | "running" | "completed" | "failed";
-  results: Record<
-    string,
-    {
-      status: "pending" | "running" | "completed" | "failed";
-      cacheHit: boolean;
-      error?: string | null;
-    }
-  >;
-}
-
 export interface HealthResponse {
   status: string;
   version: string;

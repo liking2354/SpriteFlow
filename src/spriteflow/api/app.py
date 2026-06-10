@@ -33,7 +33,6 @@ from .deps import set_db, set_storage, set_router, set_executor, set_template_db
 # 导入节点以触发注册
 from ..nodes import *  # noqa: F401, F403
 
-from .workflows import router as workflows_router
 from .assets import router as assets_router
 from .nodes import router as nodes_router
 from .routing import router as routing_router
@@ -250,7 +249,7 @@ def create_app() -> FastAPI:
     """创建 FastAPI 应用"""
     app = FastAPI(
         title="SpriteFlow",
-        description="面向 2D 游戏素材生产的节点化工作流平台",
+        description="面向 2D 游戏素材生产的节点化管线平台",
         version="0.1.0",
         lifespan=lifespan,
     )
@@ -264,7 +263,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(workflows_router, prefix="/api", tags=["workflows"])
     app.include_router(assets_router, prefix="/api", tags=["assets"])
     app.include_router(nodes_router, prefix="/api", tags=["nodes"])
     app.include_router(routing_router, prefix="/api", tags=["routing"])

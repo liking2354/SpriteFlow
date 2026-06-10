@@ -47,7 +47,7 @@ class NodeRunResult:
 
 @dataclass
 class WorkflowRun:
-    """工作流执行实例"""
+    """DAG 执行实例"""
 
     run_id: str
     workflow_name: str
@@ -58,7 +58,7 @@ class WorkflowRun:
 
 
 class Executor:
-    """工作流执行器
+    """DAG 执行器
 
     职责：
     1. 按 DAG 拓扑序调度节点
@@ -92,7 +92,7 @@ class Executor:
         run_id: str = "",
         workflow_name: str = "",
     ) -> WorkflowRun:
-        """执行整个 DAG 工作流
+        """执行整个 DAG
 
         如果传入 run，则直接使用该对象更新进度（用于 SSE 实时推送场景）；
         否则创建一个新的 WorkflowRun。
