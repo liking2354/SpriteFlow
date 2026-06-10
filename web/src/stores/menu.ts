@@ -77,8 +77,7 @@ const DEFAULT_ITEMS: MenuItem[] = [
   { id: "assets",       to: "/assets",       i18nKey: "nav.assets",       section: "manage",   visible: true, order: 6 },
   { id: "templates",    to: "/templates",    i18nKey: "nav.templates",    section: "manage",   visible: true, order: 7 },
   { id: "graph",        to: "/graphs",       i18nKey: "nav.graph",        section: "manage",   visible: true, order: 8 },
-  { id: "nodes",        to: "/nodes",        i18nKey: "nav.nodes",        section: "manage",   visible: true, order: 9 },
-  { id: "routing",      to: "/routing",      i18nKey: "nav.routing",      section: "manage",   visible: true, order: 10 },
+  { id: "routing",      to: "/routing",      i18nKey: "nav.routing",      section: "manage",   visible: true, order: 9 },
 ];
 
 // ---- 切换开关（未来通过环境变量或配置控制） ----

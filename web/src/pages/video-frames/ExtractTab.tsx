@@ -4,9 +4,10 @@ import { api } from "@/api/client";
 import type { VFProbeResponse, VFJobResponse } from "@/api/types";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Field, TextInput } from "@/components/ui/Field";
+import { Field, TextInput, Select } from "@/components/ui/Field";
 import { loadImage, exportFramesZip, exportFramesGif, recombineFrames, downloadBlob, flipFrameH, shiftFrame } from "@/lib/spritesheet";
 import type { Frame } from "@/lib/spritesheet";
+import { type MatteModel, MATTE_MODEL_OPTIONS, DEFAULT_MATTE_MODEL } from "@/constants/matte";
 
 type Step = 1 | 2 | 3;
 type ProcessingMode = "pixel" | "smooth";
@@ -615,6 +616,8 @@ export function ExtractTab({ onNewJob }: { onNewJob?: () => void }) {
 
   // === AI Matte Progress ===
   const [matteProgress, setMatteProgress] = useState<{ cur: number; total: number } | null>(null);
+  const [matteModel, setMatteModel] = useState<MatteModel>(DEFAULT_MATTE_MODEL);
+  const [matteAlpha, setMatteAlpha] = useState(true);
 
   // === Step 2: Animation Preview states ===
   const [activeFrame, setActiveFrame] = useState(0);
@@ -822,7 +825,7 @@ export function ExtractTab({ onNewJob }: { onNewJob?: () => void }) {
         try {
           const blob = await urlToBlob(f.url);
           const file = new File([blob], f.name, { type: "image/png" });
-          const resultBlob = await api.matteImage(file);
+          const resultBlob = await api.matteImage(file, matteModel, matteAlpha);
           const c = document.createElement("canvas");
           const img = await loadImage(URL.createObjectURL(resultBlob));
           c.width = img.naturalWidth;
@@ -1179,6 +1182,29 @@ export function ExtractTab({ onNewJob }: { onNewJob?: () => void }) {
             {/* Batch Operations */}
             <Card title={t("videoFrames.new.batchOps")}>
               <div className="space-y-2">
+                {/* Matte Model Selector + Alpha Toggle */}
+                <div className="flex items-center gap-2">
+                  <Select
+                    className="flex-1 h-7 text-[10px]"
+                    value={matteModel}
+                    onChange={(e) => setMatteModel(e.target.value as MatteModel)}
+                    disabled={busy === "matte"}
+                  >
+                    {MATTE_MODEL_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
+                    ))}
+                  </Select>
+                  <label className="flex items-center gap-1 cursor-pointer select-none whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={matteAlpha}
+                      onChange={(e) => setMatteAlpha(e.target.checked)}
+                      disabled={busy === "matte"}
+                      className="w-3 h-3 accent-[var(--acc)] disabled:opacity-50"
+                    />
+                    <span className="text-[10px] text-txt-3">{t("editor.alphaMatting", "Alpha 修边")}</span>
+                  </label>
+                </div>
                 <div className="grid grid-cols-3 gap-1">
                   <Button size="sm" variant="outline" onClick={handleAiMatte} disabled={busy === "matte"} loading={busy === "matte"}>
                     ✨ {t("videoFrames.new.aiMatte")}

@@ -98,7 +98,6 @@ class VolcengineImageProvider(Provider):
     支持能力：
       - ENHANCE_PHOTO  图像画质增强
       - IMAGE_INPAINT   图像擦除修复
-      - REMOVE_BG       图像背景移除（复用 human_segment）
       - IMAGE_CUT       图像智能裁剪
       - IMAGE_OUTPAINT  智能扩图
       - SLIM_IMAGE      集智瘦身（HTTP Bearer Token API）
@@ -109,7 +108,6 @@ class VolcengineImageProvider(Provider):
     capabilities = {
         Capability.ENHANCE_PHOTO,
         Capability.IMAGE_INPAINT,
-        Capability.REMOVE_BG,
         Capability.IMAGE_CUT,
         Capability.IMAGE_OUTPAINT,
         Capability.SLIM_IMAGE,
@@ -147,8 +145,6 @@ class VolcengineImageProvider(Provider):
             return await self._enhance_photo(ak, sk, image_bytes, payload)
         elif cap == Capability.IMAGE_INPAINT:
             return await self._image_inpaint(ak, sk, image_bytes, payload)
-        elif cap == Capability.REMOVE_BG:
-            return await self._remove_bg(ak, sk, image_bytes, payload)
         elif cap == Capability.IMAGE_CUT:
             return await self._image_cut(ak, sk, image_bytes, payload)
         elif cap == Capability.IMAGE_OUTPAINT:
@@ -211,36 +207,6 @@ class VolcengineImageProvider(Provider):
 
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, lambda: svc.image_inpaint(form))
-
-        image_url = result.get("data", {}).get("image", "")
-        if not image_url and result.get("data", {}).get("image_base64"):
-            img_bytes = _base64_to_bytes(result["data"]["image_base64"])
-            return {"image_bytes": img_bytes, "raw": result}
-
-        img_bytes = _download_image(image_url) if image_url else b""
-        return {"image_url": image_url, "image_bytes": img_bytes, "raw": result}
-
-    async def _remove_bg(self, ak: str, sk: str, image_bytes: bytes, payload: dict) -> dict:
-        """图像背景移除 — human_segment (人像) 或 general_segment (通用)"""
-        import asyncio
-
-        svc = _get_visual_service(ak, sk)
-        b64 = _image_to_base64(image_bytes)
-
-        # 根据 refine 参数选择精细化程度
-        refine = payload.get("refine", "mask")
-
-        form = {
-            "image_base64": b64,
-            "refine": refine,  # "mask" | "hair" | "face" | "all"
-            "return_url": 1,
-        }
-
-        logger.info(f"[volc] human_segment refine={refine}")
-
-        loop = asyncio.get_event_loop()
-        # 优先 human_segment（人像），如果是通用物体可以切换 general_segment
-        result = await loop.run_in_executor(None, lambda: svc.human_segment(form))
 
         image_url = result.get("data", {}).get("image", "")
         if not image_url and result.get("data", {}).get("image_base64"):

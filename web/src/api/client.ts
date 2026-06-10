@@ -237,8 +237,6 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(req),
     }),
-  reloadRouting: () =>
-    request<RoutingResponse>("/routing/reload", { method: "POST" }),
   /** 获取 provider 配置（model / base_url / api_key 状态） */
   getConfig: () => request<ConfigResponse>("/config"),
   /** 更新 provider 配置 */
@@ -444,10 +442,12 @@ export const api = {
     return res.json();
   },
 
-  /** AI 抠图单张图片 */
-  matteImage: async (file: File): Promise<Blob> => {
+  /** AI 抠图单张图片，可指定模型名称（如 isnet-general-use / birefnet-general）和 alpha matting */
+  matteImage: async (file: File, model?: string, alphaMatting?: boolean): Promise<Blob> => {
     const fd = new FormData();
     fd.append("file", file);
+    if (model) fd.append("model", model);
+    if (alphaMatting) fd.append("alpha_matting", "true");
     const res = await fetch(`${BASE}/video-frames/matte`, { method: "POST", body: fd });
     if (!res.ok) throw new Error(`matte failed: ${res.status}`);
     return res.blob();

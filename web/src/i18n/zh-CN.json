@@ -34,7 +34,6 @@
     "videoFrames": "视频序列帧",
     "assets": "素材库",
     "routing": "能力路由",
-    "nodes": "节点库",
     "specs": "规格书",
     "characters": "角色模板",
     "actions": "动作模板",
@@ -117,6 +116,8 @@
     "open": "编辑",
     "removeBg": "一键抠图",
     "removeBgHint": "浏览器内 AI 去背景，输出透明 PNG",
+    "removeBgDone": "抠图完成",
+    "pixelMatteHint": "后端 AI 抠图",
     "removing": "抠图中",
     "savedNew": "已保存为新素材",
     "saving": "保存中…",
@@ -138,8 +139,21 @@
       "balanced": "标准",
       "best": "高精度"
     },
+    "matteModelLabel": "抠图模型",
+    "matteModel": {
+      "general": "通用首选",
+      "lite": "轻量高精",
+      "anime": "动漫/二次元",
+      "photo": "照片级精抠",
+      "portrait": "人像特化",
+      "massive": "综合最强",
+      "dis": "二义性分割",
+      "hrsod": "高分辨率",
+      "cod": "隐蔽物体"
+    },
     "tabBasic": "基础工具",
-    "tabPixel": "精细处理"
+    "tabPixel": "精细处理",
+    "alphaMatting": "Alpha 修边"
   },
   "spritesheet": {
     "title": "精灵表工具",
@@ -398,21 +412,6 @@
       "slim_image": "集智瘦身",
       "resize_image": "图像缩放"
     }
-  },
-  "nodes": {
-    "title": "节点库",
-    "subtitle": "所有可用节点及其 schema",
-    "category": {
-      "generate": "生成",
-      "process": "处理",
-      "pixel": "像素",
-      "flow": "编排",
-      "export": "导出",
-      "uncategorized": "未分类"
-    },
-    "inputs": "输入",
-    "outputs": "输出",
-    "params": "参数"
   },
   "status": {
     "ok": "正常",

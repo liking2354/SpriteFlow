@@ -122,6 +122,7 @@ SpriteFlow/
 ├── docs/                     # Design documents
 ├── graphs/                   # Pipeline graph definitions (JSON)
 │   └── presets/              # Preset graph templates
+├── runs/                     # Runtime output (video frames, matte results)
 ├── scripts/                  # Utility scripts
 ├── src/spriteflow/           # Backend (Python)
 │   ├── api/                  # FastAPI routes

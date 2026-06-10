@@ -78,14 +78,6 @@ export function RoutingPage() {
     },
   });
 
-  const reloadRouting = useMutation({
-    mutationFn: api.reloadRouting,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["routing"] });
-      setDirty(false);
-    },
-  });
-
   // ----- OpenRouter config edit state -----
   const [orModel, setOrModel] = useState("");
   const [orBaseUrl, setOrBaseUrl] = useState("");
@@ -213,14 +205,6 @@ export function RoutingPage() {
                 {t("common.cancel")}
               </Button>
             )}
-            <Button
-              size="xs"
-              variant="outline"
-              loading={reloadRouting.isPending}
-              onClick={() => reloadRouting.mutate()}
-            >
-              ↻ {t("routing.reload", { defaultValue: "重新加载" })}
-            </Button>
             <Button
               size="sm"
               loading={saveRouting.isPending}

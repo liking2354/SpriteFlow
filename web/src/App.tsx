@@ -6,12 +6,10 @@ import { AppShell } from "@/components/layout/AppShell";
 import { GeneratePage } from "@/pages/Generate";
 import { AssetsPage } from "@/pages/Assets";
 import { RoutingPage } from "@/pages/Routing";
-import { NodesPage } from "@/pages/Nodes";
 import { EditorPage } from "@/pages/Editor";
 import { SpriteSheetPage } from "@/pages/SpriteSheet";
 import { VideoPage } from "@/pages/Video";
 import { TemplatesPage } from "@/pages/Templates";
-import { GraphPage } from "@/pages/Graph";
 import { GraphListPage } from "@/pages/GraphList";
 import { GraphEditorPage } from "@/pages/GraphEditor";
 import { VideoFramesPage } from "@/pages/VideoFrames";
@@ -32,13 +30,11 @@ export function App() {
         <Route path="/assets" element={<AssetsPage />} />
         <Route path="/editor" element={<EditorPage />} />
         <Route path="/spritesheet" element={<SpriteSheetPage />} />
-        <Route path="/nodes" element={<NodesPage />} />
         <Route path="/routing" element={<RoutingPage />} />
         <Route path="/templates" element={<TemplatesPage />} />
         <Route path="/graphs" element={<GraphListPage />} />
         <Route path="/graphs/:graphId/edit" element={<GraphEditorPage />} />
         <Route path="/graphs/new" element={<GraphEditorPage />} />
-        <Route path="/graph" element={<GraphPage />} />
         <Route path="/video-frames" element={<VideoFramesPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

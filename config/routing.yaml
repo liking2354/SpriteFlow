@@ -16,8 +16,6 @@ routes:
 
 # 主 provider 失败时的回退链
 fallback:
-  remove_bg:
-    - volcengine_image
   text2img:
     - openrouter
   img2img:

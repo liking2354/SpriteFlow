@@ -235,7 +235,7 @@ def _print_key_status() -> None:
     if settings.volc_access_key_id:
         configured.append("火山引擎 AI 图像处理")
     else:
-        missing.append("VOLC_ACCESS_KEY_ID — AI 图像增强/抠图/修复等功能不可用")
+        missing.append("VOLC_ACCESS_KEY_ID — AI 图像增强/修复等功能不可用")
 
     print("[SpriteFlow] ========== 服务配置状态 ==========")
     for c in configured:

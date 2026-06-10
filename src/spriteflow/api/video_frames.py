@@ -148,17 +148,40 @@ def _run_extraction_sync(job_id: str, video_path: str, params: dict):
                     raise RuntimeError("抽帧时间范围为空")
 
                 saved: list[str] = []
+                failed_ts: list[float] = []  # 记录失败的时间戳用于诊断
                 for i, ts in enumerate(timestamps):
                     out = os.path.join(tmp_dir, f"frame_{i:04d}.png")
+                    # 策略1: 输入定位（快速，依赖关键帧索引）
                     proc = subprocess.run(
                         [ffmpeg, "-y", "-ss", str(ts), "-i", video_path,
                          "-vframes", "1", "-f", "image2", "-q:v", "2", out],
                         capture_output=True,
                     )
-                    if proc.returncode != 0:
-                        continue
+                    ok = proc.returncode == 0 and os.path.exists(out) and os.path.getsize(out) > 0
+                    if not ok:
+                        # 策略2: 输出定位重试（慢但更可靠，逐帧精确解码定位）
+                        if os.path.exists(out):
+                            os.unlink(out)
+                        proc = subprocess.run(
+                            [ffmpeg, "-y", "-i", video_path,
+                             "-ss", str(ts), "-vframes", "1",
+                             "-f", "image2", "-q:v", "2", out],
+                            capture_output=True,
+                        )
+                        ok = proc.returncode == 0 and os.path.exists(out) and os.path.getsize(out) > 0
+                        if not ok:
+                            failed_ts.append(ts)
+                            print(f"[VF] 帧 {i} 取帧失败 (t={ts:.2f}s): "
+                                  f"stderr={proc.stderr.decode(errors='ignore')[:200]}")
+                            if os.path.exists(out):
+                                os.unlink(out)
+                            continue
                     saved.append(out)
                     _jobs[job_id]["progress"] = int((i + 1) / len(timestamps) * 80)
+
+                if failed_ts:
+                    print(f"[VF] {job_id}: {len(failed_ts)}/{len(timestamps)} 帧取帧失败, "
+                          f"时间戳: {[f'{t:.2f}' for t in failed_ts]}")
 
                 if not saved:
                     raise RuntimeError("ffmpeg 未生成任何帧")
@@ -759,17 +782,18 @@ async def compose_sprite(job_id: str, req: ComposeRequest):
 
 # ============ AI 抠图 ============
 
-def _run_matte_sync(content: bytes) -> bytes:
-    """在线程池执行 rembg 抠图"""
-    from rembg import remove
-    from rembg.session_factory import new_session
-    session = new_session("u2net")
-    return remove(content, session=session)
-
-
 @router.post("/video-frames/matte")
-async def matte_image(file: UploadFile = File(...)):
-    """AI 抠图：上传单张图片返回透明 PNG"""
+async def matte_image(
+    file: UploadFile = File(...),
+    model: str = Form("isnet-general-use"),
+    alpha_matting: bool = Form(False),
+):
+    """AI 抠图：上传单张图片返回透明 PNG
+
+    统一通过 CapabilityRouter → RembgProvider 执行。
+    支持通过 model 参数指定 rembg session 模型（默认 isnet-general-use）。
+    alpha_matting=True 时启用边缘精细修边处理。
+    """
     if not file.filename:
         raise HTTPException(400, "请上传图片文件")
     ext = Path(file.filename).suffix.lower()
@@ -781,8 +805,23 @@ async def matte_image(file: UploadFile = File(...)):
         raise HTTPException(400, f"图片不得超过 {MAX_IMAGE_MB}MB")
 
     try:
-        result = await asyncio.to_thread(_run_matte_sync, content)
-        return Response(content=result, media_type="image/png")
+        import io
+
+        image = PILImage.open(io.BytesIO(content)).convert("RGBA")
+
+        from .deps import get_router
+        from ..providers.base import Capability
+
+        router = get_router()
+        result = await router.route(
+            Capability.REMOVE_BG,
+            {"image": image, "session": model, "alpha_matting": alpha_matting},
+        )
+
+        output_image = result["image"]
+        buf = io.BytesIO()
+        output_image.save(buf, format="PNG")
+        return Response(content=buf.getvalue(), media_type="image/png")
     except Exception as e:
         raise HTTPException(500, f"抠图失败: {str(e)}")
 

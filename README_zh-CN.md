@@ -120,6 +120,7 @@ SpriteFlow/
 ├── docs/                     # 设计文档
 ├── graphs/                   # 流水线图定义 (JSON)
 │   └── presets/              # 预设图模板
+├── runs/                     # 运行时输出（视频抽帧、抠图结果等）
 ├── scripts/                  # 工具脚本
 ├── src/spriteflow/           # 后端 (Python)
 │   ├── api/                  # FastAPI 路由

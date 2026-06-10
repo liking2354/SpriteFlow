@@ -67,13 +67,3 @@ async def update_routing(payload: dict):
         "fallback": router_instance.get_fallbacks(),
     }
 
-
-@router.post("/routing/reload")
-async def reload_routing():
-    """从数据库重新加载路由配置（已废弃，改用数据库持久化）"""
-    return {
-        "status": "ok",
-        "routes": get_router().get_routes(),
-        "fallback": get_router().get_fallbacks(),
-        "note": "路由配置已由数据库持久化管理，无需手动重载",
-    }

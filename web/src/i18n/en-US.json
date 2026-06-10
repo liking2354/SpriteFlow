@@ -33,8 +33,7 @@
     "spritesheet": "Sprite Sheet",
     "videoFrames": "Video Frames",
     "assets": "Assets",
-    "routing": "Routing",
-    "nodes": "Nodes"
+    "routing": "Routing"
   },
   "topbar": {
     "engineOnline": "Engine Online",
@@ -110,6 +109,8 @@
     "open": "Edit",
     "removeBg": "Remove BG",
     "removeBgHint": "AI background removal in browser, outputs transparent PNG",
+    "removeBgDone": "Background removed",
+    "pixelMatteHint": "Server-side AI matte",
     "removing": "Processing",
     "savedNew": "Saved as new asset",
     "saving": "Saving…",
@@ -131,8 +132,21 @@
       "balanced": "Balanced",
       "best": "Best"
     },
+    "matteModelLabel": "Model",
+    "matteModel": {
+      "general": "General",
+      "lite": "Lite",
+      "anime": "Anime",
+      "photo": "Photo",
+      "portrait": "Portrait",
+      "massive": "Massive",
+      "dis": "Ambiguous DIS",
+      "hrsod": "Hi-Res SOD",
+      "cod": "Camouflaged"
+    },
     "tabBasic": "Basic Tools",
-    "tabPixel": "Pixel Edit"
+    "tabPixel": "Pixel Edit",
+    "alphaMatting": "Alpha Matting"
   },
   "spritesheet": {
     "title": "Sprite Sheet Tool",
@@ -391,21 +405,6 @@
       "slim_image": "Slim",
       "resize_image": "Resize"
     }
-  },
-  "nodes": {
-    "title": "Node Library",
-    "subtitle": "All available nodes and their schemas",
-    "category": {
-      "generate": "Generate",
-      "process": "Process",
-      "pixel": "Pixel",
-      "flow": "Flow",
-      "export": "Export",
-      "uncategorized": "Uncategorized"
-    },
-    "inputs": "Inputs",
-    "outputs": "Outputs",
-    "params": "Params"
   },
   "status": {
     "ok": "OK",

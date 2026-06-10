@@ -20,8 +20,14 @@ import { api } from "@/api/client";
 import type { AssetItem } from "@/api/types";
 import { filerobotZh, filerobotEn } from "@/i18n/filerobot";
 import { PixelEditor } from "@/components/PixelEditor";
+import { Select } from "@/components/ui/Field";
 
 type TabType = "basic" | "pixel";
+
+import { type MatteModel, MATTE_MODEL_OPTIONS, DEFAULT_MATTE_MODEL } from "@/constants/matte";
+
+/** imgly 浏览器端抠图模型 */
+type ImglyModel = "isnet_quint8" | "isnet_fp16" | "isnet";
 
 /** 把任意 URL 转成同源 blob: URL，避免 canvas 跨域污染 */
 async function toLocalObjectUrl(url: string, assetId?: string | null): Promise<string> {
@@ -61,8 +67,6 @@ function dataUrlToFile(dataUrl: string, filename: string): File {
 }
 
 /** 抠图模型档位（imgly 实际枚举值） */
-type ImglyModel = "isnet_quint8" | "isnet_fp16" | "isnet";
-
 const MODEL_OPTIONS: Array<{ value: ImglyModel; sizeMB: number; tier: "fast" | "balanced" | "best" }> = [
   { value: "isnet_quint8", sizeMB: 22, tier: "fast" },
   { value: "isnet_fp16", sizeMB: 44, tier: "balanced" },
@@ -244,6 +248,9 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
   const [bgModel, setBgModel] = useState<ImglyModel>("isnet_quint8");
+  const [pixelMatting, setPixelMatting] = useState(false);
+  const [pixelMatteModel, setPixelMatteModel] = useState<MatteModel>(DEFAULT_MATTE_MODEL);
+  const [pixelMatteAlpha, setPixelMatteAlpha] = useState(true);
 
   const filerobotTranslations = useMemo(() => {
     return i18n.language?.startsWith("zh") ? filerobotZh : filerobotEn;
@@ -333,6 +340,28 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
     }
   };
 
+  /** 精细处理选项卡：调用后端 rembg + u2net 抠图 */
+  const handlePixelMatte = async () => {
+    if (!localUrl || pixelMatting) return;
+    try {
+      setActionErr(null);
+      setPixelMatting(true);
+      const res = await fetch(localUrl);
+      const blob = await res.blob();
+      const file = new File([blob], "matte-input.png", { type: "image/png" });
+      const resultBlob = await api.matteImage(file, pixelMatteModel, pixelMatteAlpha);
+      const newUrl = URL.createObjectURL(resultBlob);
+      if (localUrl.startsWith("blob:")) URL.revokeObjectURL(localUrl);
+      setLocalUrl(newUrl);
+      setActionInfo(t("editor.removeBgDone", "抠图完成"));
+      setTimeout(() => setActionInfo(null), 3000);
+    } catch (e) {
+      setActionErr(`${t("editor.removeBgFailed")}: ${String(e)}`);
+    } finally {
+      setPixelMatting(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full min-h-0 rounded-l overflow-hidden border border-line bg-bg-1">
       {/* 顶部工具条：选项卡切换 */}
@@ -411,6 +440,47 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
                   <rect x="3" y="3" width="18" height="18" rx="2" />
                 </svg>
                 {bgRemoving ? `${t("editor.removing")} ${bgProgress}%` : t("editor.removeBg")}
+              </button>
+            </>
+          )}
+
+          {tab === "pixel" && (
+            <>
+              <div className="flex items-center gap-2">
+                <Select
+                  className="flex-1 h-7 text-[10px]"
+                  value={pixelMatteModel}
+                  onChange={(e) => setPixelMatteModel(e.target.value as MatteModel)}
+                  disabled={pixelMatting}
+                >
+                  {MATTE_MODEL_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
+                  ))}
+                </Select>
+                <label className="flex items-center gap-1 cursor-pointer select-none whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={pixelMatteAlpha}
+                    onChange={(e) => setPixelMatteAlpha(e.target.checked)}
+                    disabled={pixelMatting}
+                    className="w-3 h-3 accent-[var(--acc)] disabled:opacity-50"
+                  />
+                  <span className="text-[10px] text-txt-3">{t("editor.alphaMatting", "Alpha 修边")}</span>
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={handlePixelMatte}
+                disabled={!localUrl || pixelMatting || saving}
+                className="flex items-center gap-1.5 px-3 h-8 rounded-s border border-line bg-bg-3 text-[11.5px] text-txt-1 hover:text-txt-0 hover:border-[var(--acc)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title={t("editor.pixelMatteHint", "后端 AI 抠图")}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="9" />
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M2 12h4M18 12h4" />
+                </svg>
+                {pixelMatting ? t("editor.removing") : t("editor.removeBg")}
               </button>
             </>
           )}

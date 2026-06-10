@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type Tool = "brush" | "eraser" | "superEraser" | "selectMove" | "eyedropper" | "pan";
+type BrushShape = "round" | "square";
 type ToolDef = { id: Tool; label: string; icon: ReactNode };
 type SelRect = { x: number; y: number; w: number; h: number };
 type Marquee = { ax: number; ay: number; bx: number; by: number };
@@ -50,11 +51,13 @@ export function PixelEditor({ src, onExport, onReset }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const [tool, setTool] = useState<Tool>("brush");
-  const toolRef = useRef<Tool>("brush"); toolRef.current = tool;
+  const [tool, setTool] = useState<Tool>("pan");
+  const toolRef = useRef<Tool>("pan"); toolRef.current = tool;
   const [brushColor, setBrushColor] = useState("#ff0000");
   const [brushSize, setBrushSize] = useState(4);
   const brushSizeRef = useRef(4); brushSizeRef.current = brushSize;
+  const [brushShape, setBrushShape] = useState<BrushShape>("round");
+  const brushShapeRef = useRef<BrushShape>("round"); brushShapeRef.current = brushShape;
   const [eraserSize, setEraserSize] = useState(8);
   const eraserSizeRef = useRef(8); eraserSizeRef.current = eraserSize;
   const [superTolerance, setSuperTolerance] = useState(30);
@@ -153,13 +156,18 @@ export function PixelEditor({ src, onExport, onReset }: Props) {
     const cx = px + 0.5, cy = py + 0.5;
     const radius = (isBrush ? brushSizeRef.current : eraserSizeRef.current) / 2;
     const r2 = radius * radius, rad = Math.ceil(radius);
+    const square = brushShapeRef.current === "square";
     for (let iy = Math.max(0, py - rad); iy <= Math.min(imgSize.h - 1, py + rad); iy++)
-      for (let ix = Math.max(0, px - rad); ix <= Math.min(imgSize.w - 1, px + rad); ix++)
-        if ((ix + 0.5 - cx) ** 2 + (iy + 0.5 - cy) ** 2 <= r2) {
+      for (let ix = Math.max(0, px - rad); ix <= Math.min(imgSize.w - 1, px + rad); ix++) {
+        const inShape = square
+          ? Math.abs(ix + 0.5 - cx) <= radius && Math.abs(iy + 0.5 - cy) <= radius
+          : (ix + 0.5 - cx) ** 2 + (iy + 0.5 - cy) ** 2 <= r2;
+        if (inShape) {
           const i = (iy * imgSize.w + ix) * 4;
           if (isBrush) { data.data[i] = rr; data.data[i + 1] = gg; data.data[i + 2] = bb; data.data[i + 3] = 255; }
           else data.data[i + 3] = 0;
         }
+      }
     ctx.putImageData(data, 0, 0);
     ctx.globalCompositeOperation = "source-over";
   }, [brushColor, imgSize]);
@@ -250,16 +258,22 @@ export function PixelEditor({ src, onExport, onReset }: Props) {
 
   const eraserCursor = useCallback(() => {
     const d = Math.min(128, Math.max(2, Math.ceil(eraserSize * displayScale))), r = d / 2;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}" viewBox="0 0 ${d} ${d}"><circle cx="${r}" cy="${r}" r="${r - 1}" fill="none" stroke="#333" stroke-width="2"/></svg>`;
+    const shapeEl = brushShape === "square"
+      ? `<rect x="${1}" y="${1}" width="${d - 2}" height="${d - 2}" rx="2" fill="none" stroke="#333" stroke-width="2"/>`
+      : `<circle cx="${r}" cy="${r}" r="${r - 1}" fill="none" stroke="#333" stroke-width="2"/>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}" viewBox="0 0 ${d} ${d}">${shapeEl}</svg>`;
     return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}") ${r} ${r}, cell`;
-  }, [eraserSize, displayScale]);
+  }, [eraserSize, displayScale, brushShape]);
 
   const brushCursor = useCallback(() => {
     const d = Math.min(128, Math.max(2, Math.ceil(brushSize * displayScale))), r = d / 2;
     const col = String(brushColor);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}" viewBox="0 0 ${d} ${d}"><circle cx="${r}" cy="${r}" r="${Math.max(1, r - 1)}" fill="${col}" fill-opacity="0.15" stroke="${col}" stroke-opacity="0.75" stroke-width="2"/></svg>`;
+    const shapeEl = brushShape === "square"
+      ? `<rect x="${1}" y="${1}" width="${d - 2}" height="${d - 2}" rx="2" fill="${col}" fill-opacity="0.15" stroke="${col}" stroke-opacity="0.75" stroke-width="2"/>`
+      : `<circle cx="${r}" cy="${r}" r="${Math.max(1, r - 1)}" fill="${col}" fill-opacity="0.15" stroke="${col}" stroke-opacity="0.75" stroke-width="2"/>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}" viewBox="0 0 ${d} ${d}">${shapeEl}</svg>`;
     return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}") ${r} ${r}, cell`;
-  }, [brushSize, displayScale, brushColor]);
+  }, [brushSize, displayScale, brushColor, brushShape]);
 
   // ==================== Image Load ====================
 
@@ -389,7 +403,7 @@ export function PixelEditor({ src, onExport, onReset }: Props) {
   return (
     <div className="flex h-full min-h-0">
       {/* ===== 左侧工具栏 ===== */}
-      <div className="w-[52px] flex-shrink-0 border-r border-line bg-bg-1 flex flex-col items-center py-2 gap-1">
+      <div className="w-[80px] flex-shrink-0 border-r border-line bg-bg-1 flex flex-col items-center py-2 gap-1">
         {TOOLS.map((t) => (
           <button
             key={t.id}
@@ -442,28 +456,74 @@ export function PixelEditor({ src, onExport, onReset }: Props) {
                 className="w-full h-6 rounded cursor-pointer border border-line bg-transparent p-0"
                 title="颜色"
               />
-              <div className="text-[9px] text-txt-3 text-center">光圈大小</div>
+              <div className="text-[9px] text-txt-3 text-center">画笔形状</div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setBrushShape("round")}
+                  className={`flex-1 py-0.5 rounded flex items-center justify-center gap-0.5 text-[9px] transition-colors ${
+                    brushShape === "round" ? "bg-acc text-white" : "text-txt-3 hover:text-txt-1 bg-bg-3"
+                  }`}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="8"/></svg>
+                  <span>圆形</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBrushShape("square")}
+                  className={`flex-1 py-0.5 rounded flex items-center justify-center gap-0.5 text-[9px] transition-colors ${
+                    brushShape === "square" ? "bg-acc text-white" : "text-txt-3 hover:text-txt-1 bg-bg-3"
+                  }`}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                  <span>方形</span>
+                </button>
+              </div>
+              <div className="text-[9px] text-txt-3 text-center">画笔大小</div>
               <input
                 type="range"
                 min={1}
                 max={32}
                 value={brushSize}
                 onChange={(e) => setBrushSize(Number(e.target.value))}
-                className="w-full h-2"
+                className="w-full h-2 accent-acc"
               />
               <div className="text-[10px] text-txt-2 text-center">{brushSize}px</div>
             </>
           )}
           {tool === "eraser" && (
             <>
-              <div className="text-[9px] text-txt-3 text-center">光圈大小</div>
+              <div className="text-[9px] text-txt-3 text-center">画笔形状</div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setBrushShape("round")}
+                  className={`flex-1 py-0.5 rounded flex items-center justify-center gap-0.5 text-[9px] transition-colors ${
+                    brushShape === "round" ? "bg-acc text-white" : "text-txt-3 hover:text-txt-1 bg-bg-3"
+                  }`}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="8"/></svg>
+                  <span>圆形</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBrushShape("square")}
+                  className={`flex-1 py-0.5 rounded flex items-center justify-center gap-0.5 text-[9px] transition-colors ${
+                    brushShape === "square" ? "bg-acc text-white" : "text-txt-3 hover:text-txt-1 bg-bg-3"
+                  }`}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                  <span>方形</span>
+                </button>
+              </div>
+              <div className="text-[9px] text-txt-3 text-center">画笔大小</div>
               <input
                 type="range"
                 min={1}
                 max={64}
                 value={eraserSize}
                 onChange={(e) => setEraserSize(Number(e.target.value))}
-                className="w-full h-2"
+                className="w-full h-2 accent-acc"
               />
               <div className="text-[10px] text-txt-2 text-center">{eraserSize}px</div>
             </>
@@ -471,6 +531,28 @@ export function PixelEditor({ src, onExport, onReset }: Props) {
           {tool === "superEraser" && (
             <>
               <div className="text-[9px] text-txt-3 text-center">容差</div>
+              <div className="flex items-center justify-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setBrushShape("round")}
+                  title="圆形"
+                  className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
+                    brushShape === "round" ? "bg-acc text-white" : "text-txt-3 hover:text-txt-1"
+                  }`}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="8"/></svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBrushShape("square")}
+                  title="方形"
+                  className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${
+                    brushShape === "square" ? "bg-acc text-white" : "text-txt-3 hover:text-txt-1"
+                  }`}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                </button>
+              </div>
               <input
                 type="range"
                 min={1}
@@ -579,16 +661,16 @@ export function PixelEditor({ src, onExport, onReset }: Props) {
             />
           )}
 
-          {/* 圆圈光标覆盖层（画笔/橡皮/超级橡皮/吸管工具） */}
+          {/* 光标覆盖层（画笔/橡皮/超级橡皮/吸管工具） */}
           {showCircleCursor && cursorPos && !panning && imgSize && (() => {
             const p = cursorPos!;
             const size = tool === "eraser" ? eraserSize : tool === "superEraser" ? superTolerance / 3 + 2 : tool === "eyedropper" ? 2 : brushSize;
-            const r = (size * displayScale) / 2;
             const borderColor = tool === "eraser" ? "rgba(255,255,255,0.6)" : tool === "superEraser" ? "rgba(255,200,50,0.7)" : tool === "eyedropper" ? "rgba(255,255,255,0.7)" : brushColor + "cc";
             const bgColor = tool === "eraser" ? "transparent" : tool === "superEraser" ? "transparent" : tool === "eyedropper" ? "transparent" : brushColor + "18";
+            const isSquare = brushShape === "square" && tool !== "eyedropper";
             return (
               <div
-                className="pointer-events-none absolute rounded-full border"
+                className={`pointer-events-none absolute border ${isSquare ? "rounded-[2px]" : "rounded-full"}`}
                 style={{
                   width: `${size * displayScale}px`,
                   height: `${size * displayScale}px`,
