@@ -113,6 +113,10 @@ def _run_extraction_sync(job_id: str, video_path: str, params: dict):
         spacing = params.get("spacing", 4)
         layout_mode = params.get("layout_mode", "auto_square")
         columns = params.get("columns", 8)
+        crop_left = params.get("crop_left", 0)
+        crop_right = params.get("crop_right", 0)
+        crop_top = params.get("crop_top", 0)
+        crop_bottom = params.get("crop_bottom", 0)
 
         ffmpeg = _find_ffmpeg()
 
@@ -177,22 +181,56 @@ def _run_extraction_sync(job_id: str, video_path: str, params: dict):
 
             _jobs[job_id]["progress"] = 80
 
-            # 获取帧尺寸
+            # 获取帧尺寸（先取第一帧看原始大小）
             first_img = PILImage.open(saved[0])
-            fw, fh = first_img.size
+            orig_w, orig_h = first_img.size
             first_img.close()
 
-            # 复制帧到任务目录
+            # 计算裁剪框
+            print(f"[VF-CROP] {job_id}: left={crop_left} right={crop_right} top={crop_top} bottom={crop_bottom} orig={orig_w}x{orig_h}")
+            has_crop = crop_left > 0 or crop_right > 0 or crop_top > 0 or crop_bottom > 0
+            if has_crop:
+                crop_box = (
+                    max(0, crop_left),
+                    max(0, crop_top),
+                    max(1, orig_w - crop_right),
+                    max(1, orig_h - crop_bottom),
+                )
+                fw = crop_box[2] - crop_box[0]
+                fh = crop_box[3] - crop_box[1]
+                if fw <= 0 or fh <= 0:
+                    fw, fh = orig_w, orig_h
+                    has_crop = False
+            else:
+                fw, fh = orig_w, orig_h
+
+            # 复制帧到任务目录（如需裁剪则先裁剪）
             frame_dir = jd / "frames"
             frame_dir.mkdir(exist_ok=True)
             for i, sp in enumerate(saved):
                 dst = frame_dir / f"frame_{i:04d}.png"
-                shutil.copy2(sp, dst)
+                if has_crop:
+                    img = PILImage.open(sp)
+                    cropped = img.crop(crop_box)
+                    cropped.save(dst, "PNG")
+                    if i == 0:
+                        print(f"[VF-CROP] {job_id}: applied crop {crop_box} -> {cropped.size}")
+                    cropped.close()
+                    img.close()
+                else:
+                    shutil.copy2(sp, dst)
+
+            # 收集裁剪后的帧路径（用于合成）
+            frame_paths = sorted(
+                str(frame_dir / fname)
+                for fname in os.listdir(str(frame_dir))
+                if fname.endswith(".png")
+            )
 
             # 合成 Sprite Sheet
             sheet_path = str(jd / "sprite.png")
             index_data = compose_sprite_sheet(
-                frame_paths=saved,
+                frame_paths=frame_paths,
                 timestamps=timestamps,
                 frame_w=fw,
                 frame_h=fh,
@@ -235,6 +273,10 @@ async def create_job(
     spacing: int = Form(default=4),
     layout_mode: str = Form(default="auto_square"),
     columns: int = Form(default=8),
+    crop_left: int = Form(default=0),
+    crop_right: int = Form(default=0),
+    crop_top: int = Form(default=0),
+    crop_bottom: int = Form(default=0),
 ):
     """上传视频并创建抽帧任务"""
     job_id = uuid.uuid4().hex[:12]
@@ -258,6 +300,8 @@ async def create_job(
         "fps": fps, "max_frames": max_frames,
         "start_sec": start_sec, "end_sec": end_sec,
         "spacing": spacing, "layout_mode": layout_mode, "columns": columns,
+        "crop_left": crop_left, "crop_right": crop_right,
+        "crop_top": crop_top, "crop_bottom": crop_bottom,
     }
 
     _jobs[job_id] = {
@@ -495,6 +539,222 @@ async def crop_frames(
         raise
     except Exception as e:
         raise HTTPException(500, f"裁剪失败: {str(e)}")
+
+
+# ============ 保存处理后的帧 ============
+
+from pydantic import BaseModel
+
+
+class SaveFramesRequest(BaseModel):
+    """保存帧请求：接收前端处理后的帧数据"""
+    frames: list[str]  # base64 PNG 数据列表
+
+
+class ComposeRequest(BaseModel):
+    """重新合成请求"""
+    columns: int = 8
+    margin: int = 0
+    spacing: int = 4
+    cell_size: int = 0
+    smooth: bool = False
+
+
+@router.post("/video-frames/jobs/{job_id}/save-frames")
+async def save_frames(job_id: str, req: SaveFramesRequest):
+    """接收前端处理后的帧数据，覆写帧目录并更新索引"""
+    if job_id not in _jobs:
+        raise HTTPException(404, "任务不存在")
+    if _jobs[job_id]["status"] != "completed":
+        raise HTTPException(400, "任务未完成")
+
+    try:
+        import base64
+
+        jd = _job_dir(job_id)
+        frame_dir = jd / "frames"
+        frame_dir.mkdir(exist_ok=True)
+
+        # 清空旧帧
+        for f in frame_dir.iterdir():
+            if f.suffix.lower() in ALLOWED_IMAGE_EXT:
+                f.unlink()
+
+        # 写入新帧
+        saved_count = 0
+        fw, fh = None, None
+        for i, b64_data in enumerate(req.frames):
+            if not b64_data:
+                continue
+            # 支持带或不带 data:image/png;base64, 前缀
+            if "," in b64_data and b64_data.startswith("data:"):
+                b64_data = b64_data.split(",", 1)[1]
+            try:
+                img_bytes = base64.b64decode(b64_data)
+            except Exception:
+                continue
+            dst = frame_dir / f"frame_{i:04d}.png"
+            dst.write_bytes(img_bytes)
+            if fw is None:
+                try:
+                    with PILImage.open(dst) as test_img:
+                        fw, fh = test_img.size
+                except Exception:
+                    pass
+            saved_count += 1
+
+        if saved_count == 0:
+            raise HTTPException(400, "没有有效的帧数据")
+
+        # 更新帧尺寸到 result
+        if fw is not None and fh is not None:
+            result = _jobs[job_id].get("result") or {}
+            result["frame_size"] = {"w": fw, "h": fh}
+            _jobs[job_id]["result"] = result
+
+        return {
+            "status": "ok",
+            "saved": saved_count,
+            "frame_size": {"w": fw, "h": fh} if fw else None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"保存帧失败: {str(e)}")
+
+
+@router.post("/video-frames/jobs/{job_id}/compose")
+async def compose_sprite(job_id: str, req: ComposeRequest):
+    """用当前帧目录重新合成精灵表（支持边距/间距/单帧尺寸参数）"""
+    if job_id not in _jobs:
+        raise HTTPException(404, "任务不存在")
+    if _jobs[job_id]["status"] != "completed":
+        raise HTTPException(400, "任务未完成")
+
+    try:
+        import math
+
+        jd = _job_dir(job_id)
+        frame_dir = jd / "frames"
+        if not frame_dir.exists():
+            raise HTTPException(400, "帧目录不存在")
+
+        frame_files = sorted(
+            str(fp) for fp in frame_dir.iterdir()
+            if fp.suffix.lower() in ALLOWED_IMAGE_EXT
+        )
+        if not frame_files:
+            raise HTTPException(400, "没有可合成的帧")
+
+        # 读取第一帧获取原始尺寸
+        first_img = PILImage.open(frame_files[0])
+        orig_w, orig_h = first_img.size
+        first_img.close()
+
+        # 获取时间戳
+        timestamps: list[float] = []
+        index_path = jd / "index.json"
+        if index_path.exists():
+            with open(index_path, "r", encoding="utf-8") as f:
+                idx = json.load(f)
+                timestamps = [fr["t"] for fr in idx.get("frames", [])]
+        if not timestamps or len(timestamps) != len(frame_files):
+            timestamps = [float(i) for i in range(len(frame_files))]
+
+        columns = max(1, req.columns)
+        margin = max(0, req.margin)
+        spacing = max(0, req.spacing)
+        cell_size = max(0, req.cell_size)
+
+        # 帧尺寸处理
+        if cell_size > 0:
+            # 缩放到统一尺寸
+            processed_frames = []
+            for fp in frame_files:
+                img = PILImage.open(fp)
+                if img.size != (cell_size, cell_size):
+                    if req.smooth:
+                        img = img.resize((cell_size, cell_size), PILImage.Resampling.LANCZOS)
+                    else:
+                        img = img.resize((cell_size, cell_size), PILImage.Resampling.NEAREST)
+                processed_frames.append(img)
+            fw = fh = cell_size
+            use_processed = True
+        else:
+            use_processed = False
+            fw, fh = orig_w, orig_h
+
+        # 计算布局
+        n = len(frame_files)
+        cols = min(columns, n)
+        rows = math.ceil(n / cols)
+
+        cell_total_w = fw + 2 * margin
+        cell_total_h = fh + 2 * margin
+        sheet_w = cols * cell_total_w + (cols - 1) * spacing
+        sheet_h = rows * cell_total_h + (rows - 1) * spacing
+
+        # 合成大图
+        sheet = PILImage.new("RGBA", (sheet_w, sheet_h), (0, 0, 0, 0))
+        for i in range(n):
+            col = i % cols
+            row = i // cols
+            x = col * (cell_total_w + spacing) + margin
+            y = row * (cell_total_h + spacing) + margin
+            if use_processed:
+                sheet.paste(processed_frames[i], (x, y))
+            else:
+                img = PILImage.open(frame_files[i])
+                sheet.paste(img, (x, y))
+                img.close()
+
+        # 保存
+        sheet_path = str(jd / "sprite.png")
+        sheet.save(sheet_path, "PNG")
+        sheet.close()
+        if use_processed:
+            for img in processed_frames:
+                img.close()
+
+        # 更新索引
+        index_data = {
+            "version": "1.0",
+            "frame_size": {"w": fw, "h": fh},
+            "sheet_size": {"w": sheet_w, "h": sheet_h},
+            "frames": [
+                {
+                    "i": i,
+                    "x": (i % cols) * (cell_total_w + spacing) + margin,
+                    "y": (i // cols) * (cell_total_h + spacing) + margin,
+                    "w": fw,
+                    "h": fh,
+                    "t": timestamps[i] if i < len(timestamps) else float(i),
+                }
+                for i in range(n)
+            ],
+        }
+        with open(index_path, "w", encoding="utf-8") as f:
+            json.dump(index_data, f, ensure_ascii=False, indent=2)
+
+        # 更新 result
+        _jobs[job_id]["result"] = {
+            "sprite_path": str(sheet_path),
+            "index_path": str(index_path),
+            "frame_count": n,
+            "frame_size": {"w": fw, "h": fh},
+            "sheet_size": {"w": sheet_w, "h": sheet_h},
+        }
+
+        return {
+            "status": "ok",
+            "frame_count": n,
+            "frame_size": {"w": fw, "h": fh},
+            "sheet_size": {"w": sheet_w, "h": sheet_h},
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"合成失败: {str(e)}")
 
 
 # ============ AI 抠图 ============

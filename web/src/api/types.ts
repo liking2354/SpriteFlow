@@ -745,6 +745,10 @@ export interface VFExtractParams {
   spacing: number;
   layout_mode: string;
   columns: number;
+  crop_left?: number;
+  crop_right?: number;
+  crop_top?: number;
+  crop_bottom?: number;
 }
 
 export interface VFJobResult {
@@ -816,4 +820,33 @@ export interface VFCropResponse {
   sheet_size: { w: number; h: number };
   frame_count: number;
   crop: VFCropParams;
+}
+
+/** 保存帧请求 */
+export interface VFSaveFramesRequest {
+  frames: string[]; // base64 PNG 数据
+}
+
+/** 保存帧响应 */
+export interface VFSaveFramesResponse {
+  status: string;
+  saved: number;
+  frame_size?: { w: number; h: number } | null;
+}
+
+/** 重新合成请求 */
+export interface VFComposeRequest {
+  columns: number;
+  margin: number;
+  spacing: number;
+  cell_size: number;
+  smooth: boolean;
+}
+
+/** 重新合成响应 */
+export interface VFComposeResponse {
+  status: string;
+  frame_count: number;
+  frame_size: { w: number; h: number };
+  sheet_size: { w: number; h: number };
 }

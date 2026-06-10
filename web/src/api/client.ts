@@ -35,6 +35,10 @@ import type {
   VFFramesList,
   VFCropParams,
   VFCropResponse,
+  VFSaveFramesRequest,
+  VFSaveFramesResponse,
+  VFComposeRequest,
+  VFComposeResponse,
 } from "./types";
 
 const BASE = "/api";
@@ -414,6 +418,8 @@ export const api = {
     fps?: number; max_frames?: number;
     start_sec?: number; end_sec?: number;
     spacing?: number; layout_mode?: string; columns?: number;
+    crop_left?: number; crop_right?: number;
+    crop_top?: number; crop_bottom?: number;
   }): Promise<VFCreateJobResponse> => {
     const fd = new FormData();
     fd.append("file", file);
@@ -424,6 +430,10 @@ export const api = {
     fd.append("spacing", String(params.spacing ?? 4));
     fd.append("layout_mode", params.layout_mode ?? "auto_square");
     fd.append("columns", String(params.columns ?? 8));
+    fd.append("crop_left", String(params.crop_left ?? 0));
+    fd.append("crop_right", String(params.crop_right ?? 0));
+    fd.append("crop_top", String(params.crop_top ?? 0));
+    fd.append("crop_bottom", String(params.crop_bottom ?? 0));
     const res = await fetch(`${BASE}/video-frames/jobs`, { method: "POST", body: fd });
     if (!res.ok) throw new Error(`create failed: ${res.status}`);
     return res.json();
@@ -478,6 +488,20 @@ export const api = {
   getWatermarkResultUrl: (jobId: string) => `${BASE}/video-frames/watermark/${jobId}/result`,
   /** 删除水印任务 */
   deleteWatermarkJob: (jobId: string) => request<{ ok: boolean }>(`/video-frames/watermark/${jobId}`, { method: "DELETE" }),
+
+  /** 保存处理后的帧到后端 */
+  saveVFrames: (jobId: string, req: VFSaveFramesRequest) =>
+    request<VFSaveFramesResponse>(`/video-frames/jobs/${jobId}/save-frames`, {
+      method: "POST",
+      body: JSON.stringify(req),
+    }),
+
+  /** 重新合成精灵表 */
+  composeVFSprite: (jobId: string, req: VFComposeRequest) =>
+    request<VFComposeResponse>(`/video-frames/jobs/${jobId}/compose`, {
+      method: "POST",
+      body: JSON.stringify(req),
+    }),
 };
 
 /** SSE 订阅 sequential 流式生成 */
