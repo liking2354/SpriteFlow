@@ -74,8 +74,8 @@
   "picker": {
     "title": "选择参考图",
     "all": "全部",
-    "uploaded": "上传",
-    "generated": "AI 生成",
+    "upload": "上传",
+    "image": "图片",
     "favorite": "我的收藏"
   },
   "tabs": {
@@ -316,10 +316,12 @@
     "subtitle": "所有上传/生成/派生的素材",
     "filter": {
       "all": "全部",
+      "upload": "上传",
+      "image": "图片",
+      "video": "视频",
       "uploaded": "上传",
       "generated": "AI 生成",
       "derived": "派生",
-      "video": "视频",
       "tags": "标签筛选",
       "tagsPlaceholder": "逗号分隔"
     },

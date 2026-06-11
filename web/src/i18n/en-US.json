@@ -67,8 +67,8 @@
   "picker": {
     "title": "Pick Reference Image",
     "all": "All",
-    "uploaded": "Uploaded",
-    "generated": "Generated",
+    "upload": "Upload",
+    "image": "Image",
     "favorite": "Favorites"
   },
   "tabs": {
@@ -309,10 +309,12 @@
     "subtitle": "All uploaded / generated / derived assets",
     "filter": {
       "all": "All",
+      "upload": "Upload",
+      "image": "Image",
+      "video": "Video",
       "uploaded": "Uploaded",
       "generated": "AI Generated",
       "derived": "Derived",
-      "video": "Video",
       "tags": "Filter by Tags",
       "tagsPlaceholder": "comma-separated"
     },

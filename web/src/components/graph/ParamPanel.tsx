@@ -40,13 +40,6 @@ const SYSTEM_PARAMS: Record<string, ParamDef[]> = {
     { name: "style_prompt", label: "风格提示词", type: "textarea", default: "", placeholder: "pixel art, dark armor, red cape..." },
     { name: "size", label: "尺寸", type: "select", default: "2k", options: ["2k", "3k", "4k"] },
     { name: "enable_remove_bg", label: "去背景", type: "toggle", default: false },
-    { name: "enable_sprite_align", label: "精灵对齐", type: "toggle", default: true },
-    { name: "canvas_width", label: "画布宽度", type: "number", default: 512, min: 64, max: 4096, dependsOn: "enable_sprite_align" },
-    { name: "canvas_height", label: "画布高度", type: "number", default: 512, min: 64, max: 4096, dependsOn: "enable_sprite_align" },
-    { name: "target_width", label: "角色宽度", type: "number", default: 448, min: 4, max: 4096, dependsOn: "enable_sprite_align" },
-    { name: "target_height", label: "角色高度", type: "number", default: 480, min: 4, max: 4096, dependsOn: "enable_sprite_align" },
-    { name: "detect_threshold", label: "检测阈值", type: "number", default: 32, min: 0, max: 255, dependsOn: "enable_sprite_align" },
-    { name: "padding", label: "边距", type: "number", default: 8, min: 0, max: 64, dependsOn: "enable_sprite_align" },
   ],
 };
 
@@ -135,14 +128,7 @@ export function ParamPanel({ nodeType, params, onChange }: ParamPanelProps) {
     update("slot_values", { ...(params.slot_values ?? {}), [slotName]: value });
   };
 
-  // 分离系统参数中的对齐子参数
-  const alignmentFields = systemFields?.filter((f) => f.dependsOn === "enable_sprite_align") ?? [];
-  const mainSystemFields = systemFields?.filter((f) => f.dependsOn !== "enable_sprite_align") ?? [];
-  const spriteAlignEnabled = (() => {
-    const v = params.enable_sprite_align;
-    if (typeof v === "boolean") return v;
-    return String(v ?? true) === "true";
-  })();
+  const mainSystemFields = systemFields ?? [];
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -180,23 +166,6 @@ export function ParamPanel({ nodeType, params, onChange }: ParamPanelProps) {
               {mainSystemFields.map((f) => (
                 <ParamRow key={f.name} field={f} params={params} update={update} />
               ))}
-
-              {/* 对齐参数子卡片 */}
-              {spriteAlignEnabled && alignmentFields.length > 0 && (
-                <div
-                  className="mt-1 rounded-md border p-2.5"
-                  style={{ borderColor: "var(--line-soft)", background: "var(--bg-0)" }}
-                >
-                  <div className="text-[10px] font-semibold mb-2 uppercase tracking-wider" style={{ color: "var(--txt-3)" }}>
-                    {t("graph.alignParams", "对齐参数")}
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                    {alignmentFields.map((f) => (
-                      <ParamRowCompact key={f.name} field={f} params={params} update={update} />
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </CollapsibleSection>
         )}
@@ -286,7 +255,7 @@ function ParamRow({
         <span className="text-[10.5px] font-medium" style={{ color: "var(--txt-2)" }}>
           {field.label}
         </span>
-        <Switch checked={checked} onChange={(val) => update(field.name, val)} />
+        <Switch checked={checked} onChange={(val) => update(field.name, String(val))} />
       </div>
     );
   }

@@ -1,16 +1,16 @@
 """CharacterMaster 节点 — 角色母版生成（模板驱动）
 
-管道阶段 1：template_ids + slot_values → prompt 拼装 → 文生图 → [去背景?] → [精灵对齐?]
+管道阶段 1：template_ids + slot_values → prompt 拼装 → 文生图 → [去背景?]
 
 参数分类：
-  一类（系统参数）：enable_remove_bg / enable_sprite_align 等开关 + 对齐子参数
+  一类（系统参数）：enable_remove_bg 去背景开关
   二类（模板参数）：template_ids + slot_values，按模板 Slots 动态展示
 """
 
 from __future__ import annotations
 
 from ..engine.node import Node
-from ..engine.types import PortType, Str, Seed, Int
+from ..engine.types import PortType, Str, Seed
 from ..providers.base import Capability
 
 
@@ -26,12 +26,10 @@ class CharacterMasterNode(Node):
     """角色母版节点（模板驱动）
 
     输入：无（从模板系统加载数据拼装 prompt）
-    输出：对齐后的角色精灵图
+    输出：角色精灵图（保持 AI 生成原图尺寸）
 
     系统参数：
       enable_remove_bg    — 去背景开关（默认关闭）
-      enable_sprite_align — 精灵对齐开关（默认开启），控制 detect/crop/scale/place
-      对齐子参数仅在对齐开关开启时生效
     模板参数：
       template_ids + slot_values → assemble_prompt 拼装
     """
@@ -40,7 +38,6 @@ class CharacterMasterNode(Node):
     PARAMS = [
         # ── 系统开关 ──
         Str("enable_remove_bg", default="false", choices=["true", "false"]),
-        Str("enable_sprite_align", default="true", choices=["true", "false"]),
         # ── 模板输入 ──
         Str("template_ids", required=True),
         Str("style_prompt", default=""),
@@ -49,13 +46,6 @@ class CharacterMasterNode(Node):
         Str("watermark", default="false", choices=["true", "false"]),
         Str("output_format", default="png"),
         Seed("seed"),
-        # ── 精灵对齐子参数（仅在 enable_sprite_align 开启时生效）──
-        Int("canvas_width", default=512),
-        Int("canvas_height", default=512),
-        Int("target_width", default=448),
-        Int("target_height", default=480),
-        Int("detect_threshold", default=32),
-        Int("padding", default=8),
     ]
     OUTPUTS: dict[str, PortType] = {"image": PortType.IMAGE}
     CATEGORY = "pipeline"
@@ -68,7 +58,6 @@ class CharacterMasterNode(Node):
             raise ValueError("CharacterMaster 需要 template_db")
 
         from ..templates.builder import assemble_prompt
-        from ..engine.sprite_aligner import SpriteAligner
 
         # ── 1. 解析 template_ids 和 slot_values ──
         raw_ids = params.get("template_ids", "")
@@ -124,23 +113,4 @@ class CharacterMasterNode(Node):
         else:
             ctx.log("跳过去背景")
 
-        # ── 5. 精灵对齐（可开关，默认开启）──
-        if _parse_bool(params, "enable_sprite_align", default=True):
-            aligned = SpriteAligner.align(
-                image=image,
-                canvas_width=int(params.get("canvas_width", 512)),
-                canvas_height=int(params.get("canvas_height", 512)),
-                target_width=int(params.get("target_width", 448)),
-                target_height=int(params.get("target_height", 480)),
-                detect_threshold=int(params.get("detect_threshold", 32)),
-                padding=int(params.get("padding", 8)),
-                auto_center=True,
-                auto_crop=True,
-                bottom_align=True,
-            )
-            ctx.log(f"精灵对齐完成: {aligned.size}")
-        else:
-            aligned = image
-            ctx.log("跳过精灵对齐")
-
-        return {"image": aligned}
+        return {"image": image}

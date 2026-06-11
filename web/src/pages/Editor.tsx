@@ -27,6 +27,9 @@ interface EditorTarget {
   label?: string;
 }
 
+type PickerSource = "all" | "upload" | "image";
+const EDITOR_PAGE_SIZE = 24;
+
 export function EditorPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -35,7 +38,8 @@ export function EditorPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [target, setTarget] = useState<EditorTarget | null>(null);
-  const [pickerSource, setPickerSource] = useState<"all" | "uploaded" | "generated" | "derived">("all");
+  const [pickerSource, setPickerSource] = useState<PickerSource>("all");
+  const [pickerPage, setPickerPage] = useState(0);
 
   // ===== 1. 从 URL 参数还原 target =====
   const assetParam = searchParams.get("asset");
@@ -67,14 +71,26 @@ export function EditorPage() {
 
   // ===== 2. 选图：素材库 =====
   const list = useQuery({
-    queryKey: ["editor-assets", pickerSource],
+    queryKey: ["editor-assets", pickerSource, pickerPage],
     queryFn: () =>
       api.listAssets({
-        source: pickerSource === "all" ? undefined : pickerSource,
-        limit: 60,
+        source:
+          pickerSource === "all" ? undefined :
+          pickerSource === "upload" ? "uploaded" :
+          "generated,derived,ai_processed",
+        limit: EDITOR_PAGE_SIZE,
+        offset: pickerPage * EDITOR_PAGE_SIZE,
       }),
     enabled: !target, // 仅在未选图时拉取
   });
+
+  const totalEditorPages = list.data ? Math.max(1, Math.ceil(list.data.total / EDITOR_PAGE_SIZE)) : 1;
+
+  // 切换筛选时重置页码
+  const changeSource = (v: string) => {
+    setPickerSource(v as PickerSource);
+    setPickerPage(0);
+  };
 
   // ===== 3. 选图：上传 =====
   const upload = useMutation({
@@ -167,13 +183,12 @@ export function EditorPage() {
             <Segment
               items={[
                 { value: "all", label: t("assets.filter.all") },
-                { value: "uploaded", label: t("assets.filter.uploaded") },
-                { value: "generated", label: t("assets.filter.generated") },
-                { value: "derived", label: t("assets.filter.derived") },
+                { value: "upload", label: t("assets.filter.upload", "上传") },
+                { value: "image", label: t("assets.filter.image", "图片") },
               ]}
               value={pickerSource}
-              onChange={(v) => setPickerSource(v as typeof pickerSource)}
-              className="!w-[400px]"
+              onChange={(v) => changeSource(v)}
+              className="!w-[300px]"
             />
           </div>
 
@@ -213,6 +228,27 @@ export function EditorPage() {
                   </div>
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* 分页 */}
+          {list.data && totalEditorPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-4 pt-3 border-t border-line">
+              <Button size="xs" variant="ghost" disabled={pickerPage === 0} onClick={() => setPickerPage(0)}>
+                ««
+              </Button>
+              <Button size="xs" variant="ghost" disabled={pickerPage === 0} onClick={() => setPickerPage((p) => p - 1)}>
+                ‹
+              </Button>
+              <span className="text-[11px] text-txt-3 px-2 tabular-nums">
+                {pickerPage + 1} / {totalEditorPages}
+              </span>
+              <Button size="xs" variant="ghost" disabled={pickerPage >= totalEditorPages - 1} onClick={() => setPickerPage((p) => p + 1)}>
+                ›
+              </Button>
+              <Button size="xs" variant="ghost" disabled={pickerPage >= totalEditorPages - 1} onClick={() => setPickerPage(totalEditorPages - 1)}>
+                »»
+              </Button>
             </div>
           )}
         </Card>

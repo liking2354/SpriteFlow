@@ -179,8 +179,8 @@ export function AssetPreviewModal({ asset, onClose, onDelete, onEdit, onDownload
         <div className="flex items-center gap-3">
           <span className="text-[13px] font-mono text-txt-2">{asset.id}</span>
           <span className="text-[10px] px-1.5 py-0.5 rounded text-white"
-            style={{ background: asset.source === "uploaded" ? "var(--cyan)" : asset.source === "generated" ? "var(--acc)" : "var(--violet)", color: "#001" }}>
-            {asset.source}
+            style={{ background: isVideo ? "var(--violet)" : asset.source === "uploaded" ? "var(--cyan)" : "var(--acc)", color: "#001" }}>
+            {isVideo ? "视频" : asset.source === "uploaded" ? "上传" : "图片"}
           </span>
           {asset.width && asset.height && (
             <span className="text-[11px] text-txt-3">{asset.width}×{asset.height}</span>

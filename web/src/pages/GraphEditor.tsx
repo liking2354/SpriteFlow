@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
@@ -52,6 +52,8 @@ export function GraphEditorPage() {
   const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
   /** 底部控制台日志是否强制展开（手动切换） */
   const [consoleOpen, setConsoleOpen] = useState(false);
+  /** 自动保存 debounce timer ref */
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 加载已有图
   useEffect(() => {
@@ -197,6 +199,33 @@ export function GraphEditorPage() {
       setShowRunSummary(false);
     }
   }, [runState.isRunning]);
+
+  // 自动保存（debounce 2秒）：仅对已保存的图生效
+  const autoSaveGraph = useCallback(async () => {
+    if (!savedId || !graphName.trim() || graph.nodes.length === 0) return;
+    const g: PipelineGraphModel = {
+      ...graph,
+      id: savedId,
+      name: graphName,
+      description: graphDesc,
+    };
+    try {
+      await api.updateGraph(savedId, g);
+    } catch (e) {
+      console.error("Auto-save graph failed", e);
+    }
+  }, [graph, graphName, graphDesc, savedId]);
+
+  useEffect(() => {
+    if (!savedId) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveGraph();
+    }, 2000);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [graph, autoSaveGraph, savedId]);
 
   // 加载预设管线
   const handleLoadPreset = useCallback((presetGraph: PipelineGraphModel) => {

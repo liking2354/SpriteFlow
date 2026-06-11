@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api } from "@/api/client";
 import type { AssetItem } from "@/api/types";
+import { Button } from "./Button";
 import { Segment } from "./Segment";
 
 interface Props {
@@ -13,26 +14,52 @@ interface Props {
   multi?: boolean;
 }
 
-type Filter = "all" | "uploaded" | "generated" | "favorite";
+type Filter = "all" | "upload" | "image" | "favorite";
+
+const PAGE_SIZE = 30;
+
+/** 分类显示标签 */
+function badgeLabel(a: AssetItem): string {
+  if (a.type === "video") return "视频";
+  if (a.source === "uploaded") return "上传";
+  return "图片";
+}
+
+/** 分类 badge 底色 */
+function badgeColor(a: AssetItem): string {
+  if (a.type === "video") return "var(--violet)";
+  if (a.source === "uploaded") return "var(--cyan)";
+  return "var(--acc)";
+}
 
 export function AssetPicker({ open, onClose, onPick, multi: _ }: Props) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState<Filter>("all");
+  const [page, setPage] = useState(0);
+
+  const queryKey = ["asset-picker", filter, page];
 
   const { data, isLoading } = useQuery({
-    queryKey: ["asset-picker", filter],
+    queryKey,
     queryFn: () => {
-      const p: any = { limit: 60 };
-      if (filter === "uploaded" || filter === "generated") p.source = filter;
+      const p: any = { limit: PAGE_SIZE, offset: page * PAGE_SIZE };
+      if (filter === "upload") p.source = "uploaded";
+      else if (filter === "image") p.source = "generated,derived,ai_processed";
       if (filter === "favorite") p.favorite = true;
       return api.listAssets(p);
     },
     enabled: open,
   });
 
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+
+  const resetAndSetFilter = (v: string) => {
+    setFilter(v as Filter);
+    setPage(0);
+  };
+
   if (!open) return null;
 
-  // 用 Portal 渲染到 body，避免被父级 overflow/transform 截断
   return createPortal(
     <div
       className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 backdrop-blur-sm"
@@ -50,12 +77,12 @@ export function AssetPicker({ open, onClose, onPick, multi: _ }: Props) {
             className="ml-auto !w-[360px]"
             items={[
               { value: "all", label: t("picker.all") },
-              { value: "uploaded", label: t("picker.uploaded") },
-              { value: "generated", label: t("picker.generated") },
+              { value: "upload", label: t("picker.upload", "上传") },
+              { value: "image", label: t("picker.image", "图片") },
               { value: "favorite", label: t("picker.favorite") },
             ]}
             value={filter}
-            onChange={(v) => setFilter(v as Filter)}
+            onChange={(v) => resetAndSetFilter(v)}
           />
           <button
             onClick={onClose}
@@ -101,23 +128,49 @@ export function AssetPicker({ open, onClose, onPick, multi: _ }: Props) {
                   <div className="absolute top-1.5 left-1.5">
                     <span
                       className="text-[8.5px] font-mono px-1.5 py-0.5 rounded text-black"
-                      style={{
-                        background:
-                          a.source === "uploaded"
-                            ? "var(--cyan)"
-                            : a.source === "generated"
-                            ? "var(--acc)"
-                            : "var(--violet)",
-                      }}
+                      style={{ background: badgeColor(a) }}
                     >
-                      {a.source}
+                      {badgeLabel(a)}
                     </span>
                   </div>
                   <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-gradient-to-t from-black/80 text-[9.5px] font-mono text-white text-left">
-                    {a.width}×{a.height}
+                    {a.type === "video" ? "MP4" : `${a.width ?? "-"}×${a.height ?? "-"}`}
                   </div>
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* 分页 */}
+          {data && totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-4 pt-3 border-t border-line">
+              <Button
+                size="xs" variant="ghost" disabled={page === 0}
+                onClick={() => setPage(0)}
+              >
+                ««
+              </Button>
+              <Button
+                size="xs" variant="ghost" disabled={page === 0}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                ‹
+              </Button>
+              <span className="text-[11px] text-txt-3 px-2 tabular-nums">
+                {page + 1} / {totalPages}
+              </span>
+              <Button
+                size="xs" variant="ghost" disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                ›
+              </Button>
+              <Button
+                size="xs" variant="ghost" disabled={page >= totalPages - 1}
+                onClick={() => setPage(totalPages - 1)}
+              >
+                »»
+              </Button>
             </div>
           )}
         </div>

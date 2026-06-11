@@ -173,9 +173,19 @@ async def get_asset_children(asset_id: str):
 @router.delete("/assets/{asset_id}")
 async def delete_asset(asset_id: str):
     db = get_db()
-    success = await db.delete_asset(asset_id)
-    if not success:
+    storage = get_storage()
+    asset = await db.get_asset(asset_id)
+    if not asset:
         raise HTTPException(status_code=404, detail=f"素材不存在: {asset_id}")
+    # 同步删除 COS 对象存储中的文件
+    for uri in (asset.uri, asset.thumbnail):
+        if not uri:
+            continue
+        try:
+            await storage.delete(uri)
+        except Exception:
+            pass
+    success = await db.delete_asset(asset_id)
     return {"status": "deleted"}
 
 
@@ -195,6 +205,22 @@ class BatchMoveRequest(BaseModel):
 async def batch_delete(req: BatchDeleteRequest):
     """批量删除素材"""
     db = get_db()
+    storage = get_storage()
+    # 先查出所有素材的 COS URI
+    assets_to_delete: list[Asset] = []
+    for asset_id in req.asset_ids:
+        asset = await db.get_asset(asset_id)
+        if asset:
+            assets_to_delete.append(asset)
+    # 同步删除 COS 对象存储中的文件
+    for asset in assets_to_delete:
+        for uri in (asset.uri, asset.thumbnail):
+            if not uri:
+                continue
+            try:
+                await storage.delete(uri)
+            except Exception:
+                pass
     count = await db.batch_delete_assets(req.asset_ids)
     return {"status": "deleted", "count": count}
 

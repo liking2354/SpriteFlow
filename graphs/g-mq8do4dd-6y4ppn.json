@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "id": "g-mq8do4dd-6y4ppn",
+  "name": "性感囚犯",
+  "description": "",
+  "spec_id": null,
+  "nodes": [
+    {
+      "id": "charactermaster-1",
+      "type": "CharacterMaster",
+      "x": 176.0,
+      "y": 144.0,
+      "width": 140.0,
+      "height": 141.0,
+      "collapsed": false,
+      "params": {
+        "template_ids": "tmpl_20260608220641881992",
+        "slot_values": {},
+        "size": "2k",
+        "enable_remove_bg": "false",
+        "enable_sprite_align": "true",
+        "style_prompt": "一拳超人动漫 性感囚犯 赛博朋克 霓虹义体 ",
+        "watermark": "false",
+        "output_format": "png",
+        "canvas_width": 512,
+        "canvas_height": 512,
+        "target_width": 448,
+        "target_height": 480,
+        "detect_threshold": 32,
+        "padding": 8
+      },
+      "ui": {}
+    }
+  ],
+  "edges": [],
+  "viewport": {
+    "x": -42.4553721768342,
+    "y": -131.9654115950778,
+    "zoom": 1.4833897497141277
+  },
+  "tags": [],
+  "created_at": "2026-06-11T09:34:40.402498",
+  "updated_at": "2026-06-11T02:51:59.241637+00:00"
+}

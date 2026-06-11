@@ -154,8 +154,14 @@ class AssetDB:
             where.append(f"t.name IN ({placeholders})")
             params.extend(tags)
         if source:
-            where.append("a.source = ?")
-            params.append(source)
+            sources = [s.strip() for s in source.split(",") if s.strip()]
+            if len(sources) == 1:
+                where.append("a.source = ?")
+                params.append(sources[0])
+            elif sources:
+                placeholders = ",".join("?" for _ in sources)
+                where.append(f"a.source IN ({placeholders})")
+                params.extend(sources)
         if favorite is not None:
             where.append("a.favorite = ?")
             params.append(1 if favorite else 0)

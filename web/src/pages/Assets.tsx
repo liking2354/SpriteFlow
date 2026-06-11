@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,7 +10,28 @@ import { GroupSidebar } from "@/components/GroupSidebar";
 import { AssetPreviewModal } from "@/components/AssetPreviewModal";
 import { useConfirm } from "@/components/ui/Confirm";
 
-type SourceFilter = "all" | "uploaded" | "generated" | "derived" | "video";
+type SourceFilter = "all" | "upload" | "image" | "video";
+
+/** 将后端的 4 种 source 映射为前端的 3 类展示 */
+function sourceCategory(s: string, type: string): "upload" | "image" | "video" {
+  if (type === "video") return "video";
+  if (s === "uploaded") return "upload";
+  return "image";
+}
+
+/** source → 中文展示标签 */
+function sourceLabel(s: string, type: string): string {
+  if (type === "video") return "视频";
+  if (s === "uploaded") return "上传";
+  return "图片";
+}
+
+/** source → badge 底色 */
+function sourceColor(s: string, type: string): string {
+  if (type === "video") return "var(--violet)";
+  if (s === "uploaded") return "var(--cyan)";
+  return "var(--acc)";
+}
 
 async function downloadAssetFile(asset: AssetItem) {
   const ext = asset.type === "video" ? "mp4" : "png";
@@ -28,6 +49,119 @@ async function downloadAssetFile(asset: AssetItem) {
   URL.revokeObjectURL(url);
 }
 
+/** 右键上下文菜单 */
+function ContextMenu({
+  x, y, asset, groups, onClose,
+  onPreview, onEdit, onDelete, onMoveToGroup,
+}: {
+  x: number;
+  y: number;
+  asset: AssetItem;
+  groups: Array<{ id: string; name: string }>;
+  onClose: () => void;
+  onPreview: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onMoveToGroup: (groupId: string | null) => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [subOpen, setSubOpen] = useState(false);
+
+  // 关闭：点击外部
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    // 延迟一帧绑定，避免当前右键事件触发关闭
+    const t = setTimeout(() => document.addEventListener("click", onClick), 0);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("click", onClick);
+    };
+  }, [onClose]);
+
+  // 关闭：ESC / 滚轮
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onWheel = () => onClose();
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("wheel", onWheel, { passive: true });
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("wheel", onWheel);
+    };
+  }, [onClose]);
+
+  const menuX = Math.min(x, window.innerWidth - 180);
+  const menuY = Math.min(y, window.innerHeight - 220);
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-[9998] bg-bg-1 border border-line rounded-lg shadow-xl py-1 min-w-[150px]"
+      style={{ left: menuX, top: menuY }}
+    >
+      {[
+        { key: "preview", label: "预览", onClick: onPreview },
+        { key: "edit", label: "编辑", onClick: onEdit },
+      ].map((item) => (
+        <button
+          key={item.key}
+          className="w-full text-left px-3 py-2 text-[12px] text-txt-1 hover:bg-bg-2 transition-colors"
+          onClick={() => { item.onClick(); onClose(); }}
+        >
+          {item.key === "preview" && "🔍 "}
+          {item.key === "edit" && "✎ "}
+          {item.label}
+        </button>
+      ))}
+
+      {/* 移入分组 —— 含子菜单 */}
+      <div className="relative"
+        onMouseEnter={() => setSubOpen(true)}
+        onMouseLeave={() => setSubOpen(false)}
+      >
+        <button
+          className="w-full text-left px-3 py-2 text-[12px] text-txt-1 hover:bg-bg-2 transition-colors flex items-center justify-between"
+        >
+          <span>📁 移入分组</span>
+          <span className="text-[10px] text-txt-3">▸</span>
+        </button>
+        {subOpen && (
+          <div className="absolute left-full top-0 bg-bg-1 border border-line rounded-lg shadow-xl py-1 min-w-[130px] -ml-1">
+            <button
+              className="w-full text-left px-3 py-2 text-[12px] text-txt-2 hover:bg-bg-2 transition-colors"
+              onClick={() => { onMoveToGroup(null); onClose(); }}
+            >
+              无分组
+            </button>
+            {groups.map((g) => (
+              <button
+                key={g.id}
+                className="w-full text-left px-3 py-2 text-[12px] text-txt-1 hover:bg-bg-2 transition-colors"
+                onClick={() => { onMoveToGroup(g.id); onClose(); }}
+              >
+                {g.id === asset.group_id ? "✓ " : ""}{g.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-line my-1" />
+
+      <button
+        className="w-full text-left px-3 py-2 text-[12px] text-red-400 hover:bg-bg-2 transition-colors"
+        onClick={() => { onDelete(); onClose(); }}
+      >
+        🗑 删除
+      </button>
+    </div>
+  );
+}
+
 export function AssetsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -42,16 +176,28 @@ export function AssetsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [previewAsset, setPreviewAsset] = useState<AssetItem | null>(null);
 
+  // 右键菜单状态
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; asset: AssetItem } | null>(null);
+
   const list = useQuery({
     queryKey: ["assets", source, groupFilter, page],
     queryFn: () =>
       api.listAssets({
-        source: source === "all" ? undefined : source === "video" ? undefined : source,
+        source:
+          source === "all" ? undefined :
+          source === "upload" ? "uploaded" :
+          source === "image" ? "generated,derived,ai_processed" :
+          undefined,
         type: source === "video" ? "video" : undefined,
         group_id: groupFilter ?? undefined,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
       }),
+  });
+
+  const groups = useQuery({
+    queryKey: ["groups"],
+    queryFn: () => api.listGroups(),
   });
 
   const totalPages = list.data ? Math.max(1, Math.ceil(list.data.total / PAGE_SIZE)) : 1;
@@ -80,6 +226,11 @@ export function AssetsPage() {
     },
   });
 
+  const moveToGroup = useMutation({
+    mutationFn: ({ id, gid }: { id: string; gid: string | null }) => api.setAssetGroup(id, gid),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assets"] }),
+  });
+
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -106,20 +257,28 @@ export function AssetsPage() {
   };
 
   const handleClickAsset = (asset: AssetItem, e: React.MouseEvent) => {
-    // Cmd/Ctrl + click = 多选
     if (e.metaKey || e.ctrlKey) {
       toggleSelect(asset.id);
       return;
     }
-    // 已处于多选模式时单击切换
     if (selectedIds.size > 0) {
       toggleSelect(asset.id);
       return;
     }
-    // 普通单击 = 预览
     setPreviewAsset(asset);
   };
 
+  const handleContextMenu = (asset: AssetItem, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY, asset });
+  };
+
+  const handleContextDelete = useCallback(async (assetId: string) => {
+    if (await confirm({ message: t("assets.deleteConfirm", "确定删除？"), variant: "danger" })) {
+      del.mutate(assetId);
+    }
+  }, [confirm, del, t]);
 
   return (
     <div className="flex gap-0 h-[calc(100vh-8rem)]">
@@ -171,9 +330,8 @@ export function AssetsPage() {
             <Segment
               items={[
                 { value: "all", label: t("assets.filter.all") },
-                { value: "uploaded", label: t("assets.filter.uploaded") },
-                { value: "generated", label: t("assets.filter.generated") },
-                { value: "derived", label: t("assets.filter.derived") },
+                { value: "upload", label: t("assets.filter.upload", "上传") },
+                { value: "image", label: t("assets.filter.image", "图片") },
                 { value: "video", label: t("assets.filter.video", "视频") },
               ]}
               value={source}
@@ -233,10 +391,12 @@ export function AssetsPage() {
                 {list.data.items.map((a) => {
                   const sel = selectedIds.has(a.id);
                   const isVideo = a.type === "video";
+                  const cat = sourceCategory(a.source, a.type);
                   return (
                     <button
                       key={a.id}
                       onClick={(e) => handleClickAsset(a, e)}
+                      onContextMenu={(e) => handleContextMenu(a, e)}
                       className={`group relative aspect-square overflow-hidden rounded-m border bg-bg-0 transition-all ${
                         sel
                           ? "border-[var(--acc)] ring-1 ring-[var(--acc)]/40"
@@ -285,17 +445,14 @@ export function AssetsPage() {
                         {sel && <span className="text-[8px] leading-none">✓</span>}
                       </div>
 
-                      {/* 来源 + 尺寸 */}
+                      {/* 来源分类 badge */}
                       <div className="absolute top-1 left-1 flex gap-0.5">
                         <span className="text-[8px] font-mono px-1 py-0.5 rounded text-white"
                           style={{
-                            background:
-                              a.source === "uploaded" ? "var(--cyan)" :
-                              a.source === "generated" ? "var(--acc)" :
-                              a.source === "ai_processed" ? "var(--orange)" : "var(--violet)",
+                            background: sourceColor(a.source, a.type),
                             color: "#001",
                           }}>
-                          {a.source}
+                          {sourceLabel(a.source, a.type)}
                         </span>
                         {isVideo && (
                           <span className="text-[7px] font-mono px-1 py-0.5 rounded text-white bg-white/15">
@@ -355,6 +512,21 @@ export function AssetsPage() {
           )}
         </div>
       </div>
+
+      {/* 右键上下文菜单 */}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          asset={ctxMenu.asset}
+          groups={groups.data?.items ?? []}
+          onClose={() => setCtxMenu(null)}
+          onPreview={() => setPreviewAsset(ctxMenu.asset)}
+          onEdit={() => navigate(`/editor?asset=${encodeURIComponent(ctxMenu.asset.id)}`)}
+          onDelete={() => handleContextDelete(ctxMenu.asset.id)}
+          onMoveToGroup={(gid) => moveToGroup.mutate({ id: ctxMenu.asset.id, gid })}
+        />
+      )}
 
       {/* 预览弹窗 */}
       {previewAsset && (

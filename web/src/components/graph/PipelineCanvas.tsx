@@ -78,7 +78,8 @@ function defaultsFromSchema(schema?: NodeSchema): Partial<PipelineNodeParams> {
 }
 
 function graphKey(g: PipelineGraphModel): string {
-  return `${g.id}|${g.nodes.map((n) => `${n.id}:${n.x},${n.y}:${(n.ui as Record<string, unknown> | undefined)?.["config_node_id"] ?? ""}`).join(";")}|${g.edges.map((e) => e.id).join(";")}`;
+  const paramsHash = g.nodes.map((n) => `${n.id}:${JSON.stringify(n.params)}`).join("|");
+  return `${g.id}|${g.nodes.map((n) => `${n.id}:${n.x},${n.y}:${(n.ui as Record<string, unknown> | undefined)?.["config_node_id"] ?? ""}`).join(";")}|${g.edges.map((e) => e.id).join(";")}|p:${paramsHash}`;
 }
 
 export function PipelineCanvas({
