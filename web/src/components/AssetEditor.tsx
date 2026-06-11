@@ -20,9 +20,10 @@ import { api } from "@/api/client";
 import type { AssetItem } from "@/api/types";
 import { filerobotZh, filerobotEn } from "@/i18n/filerobot";
 import { PixelEditor } from "@/components/PixelEditor";
+import { MaskCanvas } from "@/components/InteractiveEditor/MaskCanvas";
 import { Select } from "@/components/ui/Field";
 
-type TabType = "basic" | "pixel";
+type TabType = "basic" | "pixel" | "interactive";
 
 import { type MatteModel, MATTE_MODEL_OPTIONS, DEFAULT_MATTE_MODEL } from "@/constants/matte";
 
@@ -252,6 +253,14 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
   const [pixelMatteModel, setPixelMatteModel] = useState<MatteModel>(DEFAULT_MATTE_MODEL);
   const [pixelMatteAlpha, setPixelMatteAlpha] = useState(true);
 
+  // 交互编辑状态
+  const [inpaintPrompt, setInpaintPrompt] = useState("");
+  const [inpaintBrushSize, setInpaintBrushSize] = useState(20);
+  const [inpaintMaskBlob, setInpaintMaskBlob] = useState<Blob | null>(null);
+  const [inpaintProcessing, setInpaintProcessing] = useState(false);
+  const [inpaintProgress, setInpaintProgress] = useState("");
+  const [inpaintResult, setInpaintResult] = useState<string | null>(null); // result URL or base64
+
   const filerobotTranslations = useMemo(() => {
     return i18n.language?.startsWith("zh") ? filerobotZh : filerobotEn;
   }, [i18n.language]);
@@ -281,6 +290,14 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
   }, [url, parentAssetId]);
+
+  // 切换离开交互编辑时清理
+  useEffect(() => {
+    if (tab !== "interactive") {
+      setInpaintMaskBlob(null);
+      setInpaintResult(null);
+    }
+  }, [tab]);
 
   const upload = useMutation({
     mutationFn: async ({ file, tag }: { file: File; tag: string }) => {
@@ -340,7 +357,66 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
     }
   };
 
-  /** 精细处理选项卡：调用后端 rembg + u2net 抠图 */
+  /** 交互编辑选项卡：提交即梦AI inpainting 任务 */
+  const handleInpaintSubmit = async () => {
+    if (!localUrl || !inpaintMaskBlob || inpaintProcessing) return;
+    try {
+      setActionErr(null);
+      setInpaintProcessing(true);
+      setInpaintProgress("提交中...");
+      setInpaintResult(null);
+
+      // 获取原图 blob
+      const imgRes = await fetch(localUrl);
+      const imgBlob = await imgRes.blob();
+
+      // 提交任务
+      const { task_id } = await api.inpaintSubmit(imgBlob, inpaintMaskBlob, inpaintPrompt || "删除");
+
+      // 轮询结果
+      let attempts = 0;
+      const maxAttempts = 60; // 最多等 2 分钟
+      while (attempts < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 2000));
+        attempts++;
+        setInpaintProgress(`AI 处理中... (${attempts * 2}s)`);
+        try {
+          const result = await api.inpaintPoll(task_id);
+          if (result.status === "succeeded") {
+            if (result.image_base64) {
+              // 将 base64 转为 blob URL
+              const byteChars = atob(result.image_base64);
+              const byteNums = new Uint8Array(byteChars.length);
+              for (let i = 0; i < byteChars.length; i++) {
+                byteNums[i] = byteChars.charCodeAt(i);
+              }
+              const blob = new Blob([byteNums], { type: "image/png" });
+              const newUrl = URL.createObjectURL(blob);
+              setInpaintResult(newUrl);
+            } else if (result.image_url) {
+              setInpaintResult(result.image_url);
+            }
+            setInpaintProgress("");
+            setActionInfo(t("editor.interactive.done", "AI 编辑完成"));
+            setTimeout(() => setActionInfo(null), 5000);
+            return;
+          } else if (result.status === "failed") {
+            throw new Error(result.message || "任务失败");
+          }
+        } catch (e) {
+          setInpaintProcessing(false);
+          setInpaintProgress("");
+          throw e;
+        }
+      }
+      throw new Error("处理超时，请重试");
+    } catch (e) {
+      setActionErr(`${t("editor.interactive.failed", "AI 编辑失败")}: ${String(e)}`);
+    } finally {
+      setInpaintProcessing(false);
+      setInpaintProgress("");
+    }
+  };
   const handlePixelMatte = async () => {
     if (!localUrl || pixelMatting) return;
     try {
@@ -389,10 +465,21 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
           >
             {t("editor.tabPixel", "精细处理")}
           </button>
+          <button
+            type="button"
+            onClick={() => setTab("interactive")}
+            className={`px-3 h-7 rounded-s text-[11.5px] transition-colors ${
+              tab === "interactive"
+                ? "bg-acc text-white"
+                : "text-txt-2 hover:text-txt-1"
+            }`}
+          >
+            {t("editor.tabInteractive", "交互编辑")}
+          </button>
         </div>
 
         <span className="text-[12.5px] text-txt-2 ml-3">
-          {tab === "basic" ? t("editor.subtitle") : t("editor.pixel.subtitle", "画笔 · 橡皮 · 框选移动")}
+          {tab === "basic" ? t("editor.subtitle") : tab === "pixel" ? t("editor.pixel.subtitle", "画笔 · 橡皮 · 框选移动") : t("editor.interactive.subtitle", "AI 局部重绘 · 涂抹编辑")}
         </span>
 
         <div className="ml-auto flex items-center gap-2">
@@ -481,6 +568,44 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
                   <path d="M2 12h4M18 12h4" />
                 </svg>
                 {pixelMatting ? t("editor.removing") : t("editor.removeBg")}
+              </button>
+            </>
+          )}
+
+          {tab === "interactive" && (
+            <>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-txt-3">{t("editor.interactive.brushSize", "画笔")}</span>
+                <input
+                  type="range"
+                  min={2}
+                  max={64}
+                  step={1}
+                  value={inpaintBrushSize}
+                  onChange={(e) => setInpaintBrushSize(Number(e.target.value))}
+                  className="w-16 h-1.5 accent-[var(--acc)]"
+                  disabled={inpaintProcessing}
+                />
+                <span className="text-[10px] text-txt-2 w-7">{inpaintBrushSize}</span>
+              </div>
+              <input
+                type="text"
+                value={inpaintPrompt}
+                onChange={(e) => setInpaintPrompt(e.target.value)}
+                placeholder={t("editor.interactive.promptPlaceholder", "描述编辑内容...")}
+                disabled={inpaintProcessing}
+                className="h-7 px-2 rounded-s border border-line bg-bg-3 text-[11px] text-txt-1 outline-none placeholder:text-txt-3 focus:border-[var(--acc)] disabled:opacity-50 w-[200px]"
+              />
+              <button
+                type="button"
+                onClick={handleInpaintSubmit}
+                disabled={!localUrl || !inpaintMaskBlob || inpaintProcessing || saving}
+                className="flex items-center gap-1.5 px-3 h-8 rounded-s border border-line bg-[var(--acc)] text-white text-[11.5px] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6.4-4.8-6.4 4.8 2.4-7.2-6-4.8h7.6z" />
+                </svg>
+                {inpaintProcessing ? (inpaintProgress || t("editor.interactive.processing")) : t("editor.interactive.submit")}
               </button>
             </>
           )}
@@ -587,6 +712,71 @@ export function AssetEditor({ url, parentAssetId, onSaved }: Props) {
             }}
           />
         )}
+
+        {/* 交互编辑面板：Mask Canvas + AI Inpainting */}
+        {tab === "interactive" && localUrl && (
+          <div className="flex h-full min-h-0">
+            {/* Mask 涂抹画布 */}
+            <div className="flex-1 min-w-0">
+              {inpaintResult ? (
+                <div className="relative h-full">
+                  <img
+                    src={inpaintResult}
+                    alt="AI 编辑结果"
+                    className="w-full h-full object-contain p-4"
+                    style={{ imageRendering: "pixelated" }}
+                  />
+                  <div className="absolute top-2 right-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!inpaintResult) return;
+                        try {
+                          setSaving(true);
+                          const res = await fetch(inpaintResult);
+                          const blob = await res.blob();
+                          const file = new File([blob], "ai-edited.png", { type: "image/png" });
+                          await upload.mutateAsync({ file, tag: "ai-inpainted" });
+                        } catch (e) {
+                          setActionErr(`${t("editor.saveFailed")}: ${String(e)}`);
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                      disabled={saving || upload.isPending}
+                      className="px-3 h-7 rounded-s bg-[var(--acc)] text-white text-[11px] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      {saving ? t("editor.saving") : t("editor.interactive.saveToLibrary", "保存到素材库")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (inpaintResult && inpaintResult.startsWith("blob:")) {
+                          URL.revokeObjectURL(inpaintResult);
+                        }
+                        setInpaintResult(null);
+                        setInpaintMaskBlob(null);
+                      }}
+                      className="px-3 h-7 rounded-s bg-bg-3 text-[11px] text-txt-2 hover:text-txt-1 border border-line transition-colors"
+                    >
+                      {t("editor.interactive.backEdit", "返回编辑")}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <MaskCanvas
+                  key={localUrl}
+                  src={localUrl}
+                  brushSize={inpaintBrushSize}
+                  onMaskReady={(blob) => {
+                    setInpaintMaskBlob(blob);
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

@@ -153,6 +153,18 @@
     },
     "tabBasic": "基础工具",
     "tabPixel": "精细处理",
+    "tabInteractive": "交互编辑",
+    "interactive": {
+      "subtitle": "AI 局部重绘 · 涂抹编辑 · 消除",
+      "promptPlaceholder": "描述编辑内容，如：添加一朵红色的花 / 删除",
+      "brushSize": "画笔",
+      "submit": "提交编辑",
+      "processing": "AI 处理中...",
+      "done": "AI 编辑完成",
+      "failed": "AI 编辑失败",
+      "backEdit": "返回编辑",
+      "saveToLibrary": "保存到素材库"
+    },
     "alphaMatting": "Alpha 修边"
   },
   "spritesheet": {

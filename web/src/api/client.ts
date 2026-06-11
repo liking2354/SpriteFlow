@@ -481,6 +481,31 @@ export const api = {
       method: "POST",
       body: JSON.stringify(req),
     }),
+
+  // ===== 交互编辑 (即梦AI Inpainting) =====
+  /** 提交交互编辑任务 */
+  inpaintSubmit: async (imageBlob: Blob, maskBlob: Blob, prompt: string) => {
+    const fd = new FormData();
+    fd.append("file", imageBlob, "image.png");
+    fd.append("mask_file", maskBlob, "mask.png");
+    fd.append("prompt", prompt);
+    const res = await fetch(`${BASE}/image-editor/inpaint`, { method: "POST", body: fd });
+    if (!res.ok) {
+      let detail = `${res.status} ${res.statusText}`;
+      try {
+        const body = await res.json();
+        detail = body?.detail || body?.message || detail;
+      } catch {}
+      throw new Error(detail);
+    }
+    return res.json() as Promise<{ task_id: string }>;
+  },
+
+  /** 轮询交互编辑任务结果 */
+  inpaintPoll: (taskId: string) =>
+    request<{ status: string; image_base64?: string; image_url?: string; message?: string }>(
+      `/image-editor/inpaint/${encodeURIComponent(taskId)}`,
+    ),
 };
 
 /** SSE 订阅 sequential 流式生成 */

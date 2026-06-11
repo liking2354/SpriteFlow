@@ -146,6 +146,18 @@
     },
     "tabBasic": "Basic Tools",
     "tabPixel": "Pixel Edit",
+    "tabInteractive": "Interactive Edit",
+    "interactive": {
+      "subtitle": "AI Inpainting · Brush Mask · Erase",
+      "promptPlaceholder": "Describe edit, e.g.: add a red flower / remove",
+      "brushSize": "Brush",
+      "submit": "Submit Edit",
+      "processing": "AI Processing...",
+      "done": "AI edit completed",
+      "failed": "AI edit failed",
+      "backEdit": "Back to Edit",
+      "saveToLibrary": "Save to Library"
+    },
     "alphaMatting": "Alpha Matting"
   },
   "spritesheet": {
