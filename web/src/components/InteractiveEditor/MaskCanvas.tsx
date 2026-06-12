@@ -55,6 +55,15 @@ export function MaskCanvas({ src, onMaskReady, brushSize }: Props) {
 
   const [hasMask, setHasMask] = useState(false);
 
+  // 拖动模式
+  const [isPanMode, setIsPanMode] = useState(false);
+  const isPanModeRef = useRef(false);
+  isPanModeRef.current = isPanMode;
+  const [panning, setPanning] = useState(false);
+  const panningRef = useRef(false);
+  panningRef.current = panning;
+  const panStartRef = useRef<{ x: number; y: number; offX: number; offY: number } | null>(null);
+
   // 历史栈（用于撤销）
   const historyRef = useRef<Uint8Array[]>([]);
   const MAX_HISTORY = 30;
@@ -258,6 +267,22 @@ export function MaskCanvas({ src, onMaskReady, brushSize }: Props) {
     (e: React.PointerEvent) => {
       if (!imgSize || e.button !== 0) return;
       e.preventDefault();
+
+      if (isPanModeRef.current) {
+        // 拖动模式：记录起始偏移
+        setPanning(true);
+        panningRef.current = true;
+        panStartRef.current = {
+          x: e.clientX,
+          y: e.clientY,
+          offX: offsetRef.current.x,
+          offY: offsetRef.current.y,
+        };
+        e.currentTarget.setPointerCapture(e.pointerId);
+        return;
+      }
+
+      // 画笔模式
       const pt = screenToCanvas(e.clientX, e.clientY);
       if (!pt) return;
       pushHistory();
@@ -275,6 +300,20 @@ export function MaskCanvas({ src, onMaskReady, brushSize }: Props) {
         const rect = containerRef.current.getBoundingClientRect();
         setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
       }
+
+      if (panningRef.current && panStartRef.current) {
+        // 拖动模式：更新偏移
+        const dx = e.clientX - panStartRef.current.x;
+        const dy = e.clientY - panStartRef.current.y;
+        const newOff = {
+          x: panStartRef.current.offX + dx,
+          y: panStartRef.current.offY + dy,
+        };
+        setOffset(newOff);
+        offsetRef.current = newOff;
+        return;
+      }
+
       if (drawingRef.current && imgSize) {
         e.preventDefault();
         const pt = screenToCanvas(e.clientX, e.clientY);
@@ -286,6 +325,16 @@ export function MaskCanvas({ src, onMaskReady, brushSize }: Props) {
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
+      if (panningRef.current) {
+        setPanning(false);
+        panningRef.current = false;
+        panStartRef.current = null;
+        try {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {}
+        return;
+      }
+
       setDrawing(false);
       drawingRef.current = false;
       const hasMaskNow = maskRef.current?.some((v) => v > 0) ?? false;
@@ -304,6 +353,11 @@ export function MaskCanvas({ src, onMaskReady, brushSize }: Props) {
   );
 
   const handlePointerLeave = useCallback(() => {
+    if (panningRef.current) {
+      setPanning(false);
+      panningRef.current = false;
+      panStartRef.current = null;
+    }
     setDrawing(false);
     drawingRef.current = false;
     setCursorPos(null);
@@ -311,10 +365,13 @@ export function MaskCanvas({ src, onMaskReady, brushSize }: Props) {
 
   // Window-level cleanup for stuck pointer
   useEffect(() => {
-    if (!drawing) return;
+    if (!drawing && !panning) return;
     const onUp = () => {
       setDrawing(false);
       drawingRef.current = false;
+      setPanning(false);
+      panningRef.current = false;
+      panStartRef.current = null;
     };
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
@@ -322,7 +379,7 @@ export function MaskCanvas({ src, onMaskReady, brushSize }: Props) {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [drawing]);
+  }, [drawing, panning]);
 
   // ==================== Zoom ====================
 
@@ -355,19 +412,52 @@ export function MaskCanvas({ src, onMaskReady, brushSize }: Props) {
 
   // ==================== Keyboard ====================
 
-  // Ctrl+Z undo
+  // Ctrl+Z undo / Space 临时拖动 / Ctrl+0 缩放重置
   useEffect(() => {
     if (!imgSize) return;
+    const spaceWasActiveRef = { current: false };
     const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+
       if ((e.ctrlKey || e.metaKey) && e.key === "z") {
-        const t = e.target as HTMLElement;
-        if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
         e.preventDefault();
         handleUndo();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "0") {
+        e.preventDefault();
+        setZoomFactor(1);
+        zoomFactorRef.current = 1;
+        if (containerRef.current && imgSize) {
+          const el = containerRef.current;
+          const s = Math.min(el.clientWidth / imgSize.w, el.clientHeight / imgSize.h);
+          setOffset({ x: (el.clientWidth - imgSize.w * s) / 2, y: (el.clientHeight - imgSize.h * s) / 2 });
+        }
+        return;
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === " " && !e.repeat && !isPanModeRef.current) {
+        e.preventDefault();
+        spaceWasActiveRef.current = true;
+        setIsPanMode(true);
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === " " && spaceWasActiveRef.current) {
+        spaceWasActiveRef.current = false;
+        setIsPanMode(false);
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
   }, [imgSize, handleUndo]);
 
   // Notify parent when mask changes
@@ -388,13 +478,29 @@ export function MaskCanvas({ src, onMaskReady, brushSize }: Props) {
       {/* 左侧工具栏 */}
       <div className="w-[80px] flex-shrink-0 border-r border-line bg-bg-1 flex flex-col items-center py-3 gap-2">
         <button
+          onClick={() => setIsPanMode(false)}
           title="画笔 - 涂抹编辑区域"
-          className="w-9 h-9 rounded flex flex-col items-center justify-center transition-colors bg-acc text-white"
+          className={`w-9 h-9 rounded flex flex-col items-center justify-center transition-colors ${
+            !isPanMode ? "bg-acc text-white" : "text-txt-3 hover:text-txt-1 hover:bg-bg-3"
+          }`}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18.4 2.6a2.1 2.1 0 013 3L12 15l-5 5-3 1 1-3 5-5z M10 12l4 4" />
           </svg>
           <span className="text-[8px] mt-0.5 opacity-70">画笔</span>
+        </button>
+
+        <button
+          onClick={() => setIsPanMode(true)}
+          title="拖动 - 移动画布视图"
+          className={`w-9 h-9 rounded flex flex-col items-center justify-center transition-colors ${
+            isPanMode ? "bg-acc text-white" : "text-txt-3 hover:text-txt-1 hover:bg-bg-3"
+          }`}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 9l-3 3 3 3 M9 5l3-3 3 3 M15 19l-3 3-3-3 M19 9l3 3-3 3 M2 12h20 M12 2v20" />
+          </svg>
+          <span className="text-[8px] mt-0.5 opacity-70">拖动</span>
         </button>
 
         <button
@@ -426,7 +532,7 @@ export function MaskCanvas({ src, onMaskReady, brushSize }: Props) {
       <div
         ref={containerRef}
         className="flex-1 min-h-0 overflow-hidden bg-[#1a1a2e] relative"
-        style={{ cursor: "none" }}
+        style={{ cursor: isPanMode ? (panning ? "grabbing" : "grab") : "none" }}
         onContextMenu={(e) => e.preventDefault()}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -459,8 +565,8 @@ export function MaskCanvas({ src, onMaskReady, brushSize }: Props) {
           }}
         />
 
-        {/* 光标指示器 */}
-        {cursorPos && !drawing && imgSize && (
+        {/* 光标指示器 — 仅画笔模式 */}
+        {cursorPos && !drawing && !isPanMode && imgSize && (
           <div
             className="pointer-events-none absolute rounded-full border-2 border-white/60"
             style={{
