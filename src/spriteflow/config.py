@@ -53,6 +53,16 @@ class AppSettings(BaseSettings):
     volc_secret_access_key: str = ""
     volc_mediakit_api_key: str = ""  # Bearer Token for slim-image / resize-image
 
+    # ===== AI 工作流（Vibe-Workflow 集成） =====
+    openai_api_key: str = ""
+    openai_base_url: str = "https://api.openai.com/v1"
+    replicate_api_token: str = ""
+    ollama_host: str = "http://localhost:11434"
+    workflow_db_url: str = "sqlite+aiosqlite:///data/workflow.db"
+    upload_dir: str = "./uploads"
+    max_upload_size_mb: int = 100
+    static_url_prefix: str = "/static"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     @property

@@ -13,6 +13,8 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
 ### Key Capabilities
 
 - **AI Generation** — Text-to-Image, Image-to-Image, Multi-Image Fusion, Sequential Frame Generation
+- **AI Workflow** — Visual node editor with presets, real-time execution, text/image/video/audio nodes
+- **Model Manager** — Multi-provider model registry with channels, routing, and cost tracking
 - **Character Pipeline** — Master template → direction variants → animation sprites → sprite sheets
 - **Image Processing** — Background removal, sprite alignment, sprite sheet packing, video frame extraction
 - **Video Generation** — Text-to-Video and Image-to-Video via Seedance
@@ -20,6 +22,68 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
 - **Visual Graph Editor** — Drag-and-drop pipeline composition with React Flow
 - **Batch Production** — Spec × Character × Action matrix generation
 - **Capability Routing** — Multi-provider routing with fallback chains and hot reload
+
+---
+
+## Tech Stack
+
+### Backend (Python)
+
+| Category | Technology | Purpose |
+|----------|------------|---------|
+| **Web Framework** | FastAPI + Uvicorn | REST API + SSE streaming |
+| **Data Validation** | Pydantic + pydantic-settings | Request model validation & env config |
+| **Async Database** | aiosqlite | Assets/tasks/templates/config persistence |
+| **Image Processing** | Pillow + NumPy | Format conversion, sprite alignment, spritesheet packing |
+| **Video Processing** | OpenCV | Frame extraction & cropping |
+| **AI Background Removal** | rembg | Local AI matting (offline) |
+| **Config Management** | PyYAML + python-dotenv | YAML routing config & .env vars |
+| **HTTP Client** | httpx + urllib | Provider API calls (sync/async) |
+| **Cloud Storage** | cos-python-sdk-v5 | Tencent COS object storage |
+| **SSE** | sse-starlette | Graph execution progress streaming |
+| **File Upload** | python-multipart | FormData file upload |
+| **Package Management** | uv + hatchling | Dependency management & build |
+| **Testing** | pytest + pytest-asyncio + respx | Unit tests & HTTP mocking |
+
+### Frontend (React + TypeScript)
+
+| Category | Technology | Purpose |
+|----------|------------|---------|
+| **Framework** | React 18 + TypeScript 5 | UI framework & type safety |
+| **Build Tool** | Vite 5 | Dev server & production build |
+| **CSS** | Tailwind CSS 3 + PostCSS + Autoprefixer | Utility-first styling |
+| **Flow Editor** | @xyflow/react (React Flow) | Drag-and-drop DAG pipeline editing |
+| **Image Editor** | react-filerobot-image-editor | Crop/rotate/color/filter/watermark |
+| **Pixel Editor** | Canvas API (custom) | Pixel-level brush/eraser/selection |
+| **Canvas Interaction** | react-konva + konva | Frame annotation & spritesheet preview |
+| **Browser Matting** | @imgly/background-removal | Client-side AI matting (WASM) |
+| **State Management** | Zustand 5 | Theme switching & sidebar menu |
+| **Data Fetching** | @tanstack/react-query 5 | Server state cache & optimistic updates |
+| **Routing** | react-router-dom 6 | SPA routing |
+| **i18n** | i18next + react-i18next | Chinese/English switching |
+| **GIF Processing** | gifenc + gifuct-js | GIF encoding/decoding & frame extraction |
+| **File Handling** | JSZip | Batch frame download packaging |
+
+### AI Providers
+
+| Provider | Model/Capability | Purpose |
+|----------|------------------|---------|
+| **Seedream 5.0** (Volcano ARK) | doubao-seedream-5.0 | Text2img, img2img, multi-fusion, sequential, character generation |
+| **Seedance** (Volcano ARK) | doubao-seedance-1.0 | Text2video, img2video |
+| **OpenRouter** | Multi-model gateway | LLM prompt optimization & image generation |
+| **Jimeng Inpainting** (Volcano Vision) | jimeng_image2image_dream_inpaint | Interactive AI inpainting |
+| **Rembg** | isnet series | Local AI background removal |
+| **Volcengine Image** (Volcano Vision) | Image enhancement/repair | Watermark removal, quality enhancement, matting |
+| **imgly Background Removal** (Frontend) | isnet quantized model | Browser-side WASM AI matting |
+
+### Storage & Infrastructure
+
+| Category | Technology | Notes |
+|----------|------------|-------|
+| **Database** | SQLite (aiosqlite) | Embedded, zero-config, Chinese FTS |
+| **Cloud Storage** | Tencent COS | Production image storage (falls back to local FS) |
+| **Cache** | Content-addressable (SHA256) | Node output dedup, avoids redundant AI API calls |
+| **Auth Signing** | HMAC-SHA256 (Volcengine V4) | Volcano Vision service API signing |
 
 ---
 
@@ -150,6 +214,22 @@ SpriteFlow/
 │   │   ├── sprite_aligner.py # Sprite bounding-box aligner
 │   │   ├── types.py          # Port type system
 │   │   └── video_worker.py   # Async video task poller
+│   ├── model_manager/        # Multi-provider model management
+│   │   ├── database.py       # SQLite layer (models, channels, routes)
+│   │   ├── models.py         # Data models (ModelConfig, Channel, Route)
+│   │   ├── schemas.py        # Pydantic schemas
+│   │   ├── providers/        # Provider integrations
+│   │   │   ├── base.py       # Abstract provider interface
+│   │   │   ├── openai.py     # OpenAI-compatible API provider
+│   │   │   ├── ollama.py     # Ollama local model provider
+│   │   │   ├── openrouter.py # OpenRouter multi-model gateway
+│   │   │   └── replicate.py  # Replicate.com model provider
+│   │   ├── routers/          # FastAPI routers
+│   │   │   ├── channel_router.py  # Channel CRUD endpoints
+│   │   │   └── route_router.py    # Route management endpoints
+│   │   └── services/         # Business logic
+│   │       ├── channel_service.py # Channel lifecycle management
+│   │       └── route_service.py   # Model routing service
 │   ├── nodes/                # Built-in nodes
 │   │   ├── load_asset.py     # Image input from library
 │   │   ├── text2img.py       # Text → Image
@@ -179,6 +259,21 @@ SpriteFlow/
 │   │   ├── db.py             # Template SQLite layer
 │   │   ├── models.py         # Template data models
 │   │   └── seed.py           # Preset templates
+│   ├── workflow/             # AI workflow engine
+│   │   ├── models.py         # Workflow + Preset data models
+│   │   ├── database.py       # SQLite layer (workflows, presets, runs)
+│   │   ├── workflow_helper.py # Workflow CRUD + preset seeding
+│   │   ├── routers/          # FastAPI routers
+│   │   │   ├── app_router.py       # App-level workflow settings
+│   │   │   ├── workflow_router.py  # Workflow CRUD + preset endpoints
+│   │   │   ├── cost_router.py      # Cost estimation endpoint
+│   │   │   └── model_router.py     # Model listing endpoint
+│   │   └── services/         # Business logic
+│   │       ├── base.py             # Provider service interface
+│   │       ├── model_registry.py   # Model schema registry
+│   │       ├── ollama_service.py   # Ollama model service
+│   │       ├── openai_service.py   # OpenAI model service
+│   │       └── replicate_service.py # Replicate model service
 │   ├── config.py             # Settings (env vars)
 │   └── __main__.py           # CLI entry (serve)
 ├── tests/                    # Backend tests (pytest)
@@ -186,8 +281,22 @@ SpriteFlow/
 │   └── src/
 │       ├── components/       # UI components
 │       │   ├── graph/        # Pipeline graph editor
-│       │   └── layout/       # App shell, sidebar, topbar
+│       │   ├── layout/       # App shell, sidebar, topbar
+│       │   ├── InteractiveEditor/  # Interactive image editor
+│       │   └── PixelEditor/  # Pixel-level sprite editor
 │       ├── pages/            # Route pages
+│       │   ├── Assets/       # Asset library
+│       │   ├── Editor/       # Interactive editor
+│       │   ├── Generate/     # Quick generation
+│       │   ├── GraphEditor/  # Graph pipeline editor
+│       │   ├── GraphList/    # Graph list
+│       │   ├── Routing/      # Capability routing
+│       │   ├── SpriteSheet/  # Sprite sheet tools
+│       │   ├── Templates/    # Prompt templates
+│       │   ├── Video/        # Video generation
+│       │   ├── VideoFrames/  # Video frame extraction
+│       │   ├── model-manager/  # Model manager (channels + routes)
+│       │   └── workflow/     # AI workflow editor + list
 │       ├── stores/           # Zustand stores (theme, menu)
 │       ├── api/              # API client & types
 │       ├── i18n/             # zh-CN / en-US translations

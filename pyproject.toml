@@ -10,6 +10,7 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "cos-python-sdk-v5>=1.9.30",
     "aiosqlite>=0.20.0",
+    "sqlalchemy[asyncio]>=2.0",
     "pillow>=11.0.0",
     "numpy>=2.1.0",
     "pyyaml>=6.0.2",
@@ -19,6 +20,10 @@ dependencies = [
     "python-multipart>=0.0.9",
     "sse-starlette>=2.1.0",
     "opencv-python>=4.13.0.92",
+    "openai>=1.0",
+    "replicate>=1.0",
+    "ollama>=0.4",
+    "aiofiles>=24.0",
 ]
 
 [project.scripts]

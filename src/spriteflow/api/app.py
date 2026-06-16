@@ -45,6 +45,16 @@ from .config import router as config_router
 from .menu import router as menu_router
 from .video_frames import router as video_frames_router
 from .image_editor import router as image_editor_router
+from ..model_manager.routers.channel_router import router as mm_channel_router
+from ..model_manager.routers.route_router import router as mm_route_router
+from ..model_manager.database import init_db as init_mm_db
+from ..workflow.routers.workflow_router import router as wf_router
+from ..workflow.routers.model_router import router as wf_model_router
+from ..workflow.routers.app_router import router as wf_app_router
+from ..workflow.routers.cost_router import router as cost_router
+from ..workflow.database import init_db as init_wf_db
+from ..workflow.services.model_settings_service import init_default_settings
+from ..workflow.services.model_registry import sync_custom_nodes_to_registry
 
 
 @asynccontextmanager
@@ -54,6 +64,21 @@ async def lifespan(app: FastAPI):
 
     # ---- API Key 可用性报告 ----
     _print_key_status()
+
+    # 初始化模型管理数据库
+    await init_mm_db()
+
+    # 初始化工作流数据库
+    await init_wf_db()
+    from ..workflow.database import async_session as wf_session
+    from ..workflow.services.model_registry import seed_builtin_models_to_db
+    async with wf_session() as wf_db:
+        await init_default_settings(wf_db)
+        await seed_builtin_models_to_db(wf_db)
+        await sync_custom_nodes_to_registry(wf_db)
+        from ..workflow.workflow_helper import seed_workflow_presets
+        await seed_workflow_presets(wf_db)
+        await wf_db.commit()
 
     # 初始化数据库
     db = AssetDB()
@@ -276,6 +301,12 @@ def create_app() -> FastAPI:
     app.include_router(menu_router, prefix="/api", tags=["menu"])
     app.include_router(video_frames_router, prefix="/api", tags=["video-frames"])
     app.include_router(image_editor_router, prefix="/api", tags=["image-editor"])
+    app.include_router(mm_channel_router, prefix="/api/model-manager", tags=["model-manager"])
+    app.include_router(mm_route_router, prefix="/api/model-manager", tags=["model-manager"])
+    app.include_router(wf_router, prefix="/api/workflow", tags=["workflow"])
+    app.include_router(wf_model_router, prefix="/api/workflow/models", tags=["workflow-models"])
+    app.include_router(wf_app_router, prefix="/api/workflow/app", tags=["workflow-app"])
+    app.include_router(cost_router, tags=["cost"])
 
     @app.get("/api/health")
     async def health():

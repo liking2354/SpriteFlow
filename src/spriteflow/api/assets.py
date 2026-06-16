@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import httpx
 from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Form
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 
 from .deps import get_db, get_storage
@@ -57,13 +57,19 @@ async def _asset_to_response(asset: Asset) -> AssetResponse:
     storage = get_storage()
     uri = asset.uri
     thumb = asset.thumbnail
-    try:
-        uri = await storage.get_presigned_url(asset.uri, expires=86400)
-        if asset.thumbnail:
-            thumb = await storage.get_presigned_url(asset.thumbnail, expires=86400)
-    except Exception:
-        # 本地存储或签名失败时退回原值
-        pass
+    from ..storage.local_storage import LocalStorage
+    if isinstance(storage, LocalStorage):
+        # 本地存储：返回代理 URL，浏览器走服务端代理加载
+        uri = f"/api/assets/{asset.id}/raw"
+        thumb = f"/api/assets/{asset.id}/raw?thumb=1" if asset.thumbnail else None
+    else:
+        try:
+            uri = await storage.get_presigned_url(asset.uri, expires=86400)
+            if asset.thumbnail:
+                thumb = await storage.get_presigned_url(asset.thumbnail, expires=86400)
+        except Exception:
+            # 签名失败时退回原值
+            pass
 
     return AssetResponse(
         id=asset.id,
@@ -314,16 +320,28 @@ def _is_url_allowed(url: str) -> bool:
 
 
 @router.get("/assets/{asset_id}/raw")
-async def proxy_asset_raw(asset_id: str):
-    """通过 asset_id 同源拉取原图（自动签名 + 流式回吐）。"""
+async def proxy_asset_raw(asset_id: str, thumb: bool = Query(False)):
+    """通过 asset_id 同源拉取原图/缩略图（自动签名 + 流式回吐）。"""
     db = get_db()
     storage = get_storage()
     asset = await db.get_asset(asset_id)
     if not asset:
         raise HTTPException(status_code=404, detail=f"素材不存在: {asset_id}")
 
+    # 本地存储：直接读取文件
+    from ..storage.local_storage import LocalStorage
+    if isinstance(storage, LocalStorage):
+        target_uri = (asset.thumbnail if thumb and asset.thumbnail else asset.uri)
+        path = storage._uri_to_path(target_uri)
+        if not path.exists():
+            raise HTTPException(status_code=404, detail="文件不存在")
+        media_type = "image/png" if path.suffix == ".png" else "image/jpeg"
+        return FileResponse(path, media_type=media_type)
+
+    # COS 存储：生成预签名 URL 并代理
+    target_uri = asset.thumbnail if thumb and asset.thumbnail else asset.uri
     try:
-        url = await storage.get_presigned_url(asset.uri, expires=600)
+        url = await storage.get_presigned_url(target_uri, expires=600)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"签名失败: {e}") from e
 

@@ -40,4 +40,10 @@ export const navIcons: Record<string, ReactNode> = {
   routing: (
     <svg {...attrs("M5 12h14M12 5l7 7-7 7")} />
   ),
+  workflow: (
+    <svg {...attrs("M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6zM10 7h4M10 12h4M10 17h4")} />
+  ),
+  modelManager: (
+    <svg {...attrs("M12 2l9 4.5v11L12 22l-9-4.5v-11z M12 22V12 M12 12l9-4.5 M12 12L3 7.5 M16 9l-4-2M8 9l4-2M12 17l-4 2M12 17l4 2")} />
+  ),
 };

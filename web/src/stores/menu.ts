@@ -78,6 +78,8 @@ const DEFAULT_ITEMS: MenuItem[] = [
   { id: "templates",    to: "/templates",    i18nKey: "nav.templates",    section: "manage",   visible: true, order: 7 },
   { id: "graph",        to: "/graphs",       i18nKey: "nav.graph",        section: "manage",   visible: true, order: 8 },
   { id: "routing",      to: "/routing",      i18nKey: "nav.routing",      section: "manage",   visible: true, order: 9 },
+  { id: "workflow",     to: "/workflow",     i18nKey: "nav.workflow",     section: "manage",   visible: true, order: 10 },
+  { id: "modelManager", to: "/model-manager", i18nKey: "nav.modelManager", section: "manage", visible: true, order: 11 },
 ];
 
 // ---- 切换开关（未来通过环境变量或配置控制） ----
