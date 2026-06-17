@@ -58,6 +58,9 @@ export interface AssetItem {
   group_id?: string | null;
   provenance?: Record<string, unknown> | null;
   favorite?: boolean;
+  text_preview?: string | null;
+  duration?: number | null;
+  mime_type?: string | null;
   created_at: string;
 }
 

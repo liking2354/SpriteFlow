@@ -8,8 +8,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from ..config import settings
@@ -56,6 +57,7 @@ from ..workflow.database import init_db as init_wf_db
 from ..workflow.services.model_settings_service import init_default_settings
 from ..workflow.services.model_registry import sync_custom_nodes_to_registry
 from ..components.router import router as component_router
+from ..components.registry import ComponentRegistry
 
 
 @asynccontextmanager
@@ -141,6 +143,10 @@ async def lifespan(app: FastAPI):
     # ----- 从数据库恢复运行时配置（覆盖 routing.yaml 默认值） -----
     await _restore_config_from_db(db, router)
     # ---------------------------------------------------------------
+
+    # ----- 从数据库恢复组件凭据 -----
+    await _restore_component_credentials_from_db(db)
+    # -------------------------------
 
     set_router(router)
     print(
@@ -239,6 +245,27 @@ async def _restore_config_from_db(db, router) -> None:
         print(f"[SpriteFlow] 从数据库恢复配置: {db_routes} 路由 + {db_creds} 凭证")
 
 
+async def _restore_component_credentials_from_db(db) -> None:
+    """从 config DB 恢复所有组件的凭据到 ComponentRegistry 内存"""
+    import json as _json
+
+    try:
+        raw = await db.get_configs_by_prefix("component_credential:")
+        count = 0
+        for cid, json_str in raw.items():
+            try:
+                creds = _json.loads(json_str) if isinstance(json_str, str) else json_str
+                if isinstance(creds, dict):
+                    ComponentRegistry.set_credentials(cid, creds)
+                    count += 1
+            except _json.JSONDecodeError:
+                pass
+        if count:
+            print(f"[SpriteFlow] 从数据库恢复 {count} 个组件凭据")
+    except Exception as e:
+        print(f"[SpriteFlow] 加载组件凭据失败: {e}")
+
+
 def _print_key_status() -> None:
     """启动时打印 API Key 配置状态，给出友好提示"""
     missing: list[str] = []
@@ -309,6 +336,74 @@ def create_app() -> FastAPI:
     app.include_router(wf_app_router, prefix="/api/workflow/app", tags=["workflow-app"])
     app.include_router(cost_router, tags=["cost"])
     app.include_router(component_router)
+
+    @app.api_route("/api/proxy/cos/{path:path}", methods=["GET", "HEAD"])
+    async def proxy_cos_resource(path: str, request: Request):
+        """代理 COS 资源，解决 CORS 问题"""
+        from urllib.parse import unquote
+        
+        # 解码路径
+        decoded_path = unquote(path)
+        
+        try:
+            # 使用 COS SDK 获取文件
+            cos_storage = COSStorage()
+            content = await cos_storage.download(f"cos://{settings.cos.bucket}/{decoded_path}")
+            
+            # 根据文件扩展名确定 Content-Type
+            import mimetypes
+            mime_type, _ = mimetypes.guess_type(decoded_path)
+            content_type = mime_type or "application/octet-stream"
+            
+            # 返回 COS 资源
+            return Response(
+                content=content,
+                status_code=200,
+                headers={
+                    "Content-Type": content_type,
+                    "Content-Length": str(len(content)),
+                    "Cache-Control": "public, max-age=3600",
+                }
+            )
+        except Exception as e:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Failed to fetch COS resource: {str(e)}"}
+            )
+
+    @app.api_route("/api/proxy/local/{path:path}", methods=["GET", "HEAD"])
+    async def proxy_local_resource(path: str, request: Request):
+        """代理本地存储资源，解决 CORS 问题"""
+        from urllib.parse import unquote
+        
+        # 解码路径
+        decoded_path = unquote(path)
+        
+        try:
+            # 使用本地存储获取文件
+            local_storage = LocalStorage()
+            content = await local_storage.download(f"local://{decoded_path}")
+            
+            # 根据文件扩展名确定 Content-Type
+            import mimetypes
+            mime_type, _ = mimetypes.guess_type(decoded_path)
+            content_type = mime_type or "application/octet-stream"
+            
+            # 返回本地资源
+            return Response(
+                content=content,
+                status_code=200,
+                headers={
+                    "Content-Type": content_type,
+                    "Content-Length": str(len(content)),
+                    "Cache-Control": "public, max-age=3600",
+                }
+            )
+        except Exception as e:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Failed to fetch local resource: {str(e)}"}
+            )
 
     @app.get("/api/health")
     async def health():

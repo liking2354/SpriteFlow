@@ -43,6 +43,9 @@ class AssetDB:
         await self._add_column_if_missing("assets", "group_id", "TEXT")
         await self._add_column_if_missing("graph_node_results", "node_type", "TEXT NOT NULL DEFAULT ''")
         await self._add_column_if_missing("graph_node_results", "inputs_json", "TEXT")
+        await self._add_column_if_missing("assets", "text_preview", "TEXT")
+        await self._add_column_if_missing("assets", "duration", "REAL")
+        await self._add_column_if_missing("assets", "mime_type", "TEXT")
         # 在确保列存在后再建索引
         await self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_assets_favorite ON assets(favorite)"
@@ -70,14 +73,17 @@ class AssetDB:
     async def create_asset(self, asset: Asset) -> Asset:
         assert self._conn is not None
         await self._conn.execute(
-            """INSERT INTO assets (id, type, source, uri, hash, width, height, thumbnail, parent_id, group_id, provenance, favorite, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO assets (id, type, source, uri, hash, width, height, thumbnail, parent_id, group_id, provenance, favorite, text_preview, duration, mime_type, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 asset.id, asset.type, asset.source, asset.uri, asset.hash,
                 asset.width, asset.height, asset.thumbnail, asset.parent_id,
                 asset.group_id,
                 json.dumps(asset.provenance) if asset.provenance else None,
                 1 if asset.favorite else 0,
+                asset.text_preview,
+                asset.duration,
+                asset.mime_type,
                 asset.created_at,
             ),
         )
@@ -684,6 +690,9 @@ class AssetDB:
         keys = row.keys()
         favorite = bool(row["favorite"]) if "favorite" in keys else False
         group_id = row["group_id"] if "group_id" in keys else None
+        text_preview = row["text_preview"] if "text_preview" in keys else None
+        duration = row["duration"] if "duration" in keys else None
+        mime_type = row["mime_type"] if "mime_type" in keys else None
         return Asset(
             id=row["id"],
             type=row["type"],
@@ -697,6 +706,9 @@ class AssetDB:
             group_id=group_id,
             provenance=json.loads(row["provenance"]) if row["provenance"] else None,
             favorite=favorite,
+            text_preview=text_preview,
+            duration=duration,
+            mime_type=mime_type,
             created_at=row["created_at"],
         )
 

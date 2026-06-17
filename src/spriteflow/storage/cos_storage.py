@@ -116,15 +116,24 @@ class COSStorage(StorageBackend):
         return True
 
     async def get_presigned_url(self, uri: str, expires: int = 3600) -> str:
-        """获取 COS 预签名 URL"""
+        """获取 COS 公开访问 URL。
+
+        桶已配置为公有读，直接构造 https://bucket.cos.region.myqcloud.com/key 即可，
+        无需预签名，不暴露 SecretId，也不会过期。
+        （expires 参数保留以兼容接口，实际不再使用）
+        """
         key = self._uri_to_key(uri)
-        url = self._client.get_presigned_url(
-            Method="GET",
-            Bucket=self._bucket,
-            Key=key,
-            Expired=expires,
-        )
-        return url
+        return f"{self.base_url}/{key}"
+
+    @staticmethod
+    def get_public_url_from_http_url(http_url: str) -> str:
+        """从已有的 HTTP COS URL（可能含查询参数/过期签名）还原为公开 URL。
+
+        去掉查询参数即可。
+        """
+        from urllib.parse import urlparse, urlunparse
+        parsed = urlparse(http_url)
+        return urlunparse(parsed._replace(query=""))
 
     async def exists(self, uri: str) -> bool:
         """检查 COS 对象是否存在"""

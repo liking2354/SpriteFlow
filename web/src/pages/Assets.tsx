@@ -10,31 +10,40 @@ import { GroupSidebar } from "@/components/GroupSidebar";
 import { AssetPreviewModal } from "@/components/AssetPreviewModal";
 import { useConfirm } from "@/components/ui/Confirm";
 
-type SourceFilter = "all" | "upload" | "image" | "video";
+type SourceFilter = "all" | "upload" | "image" | "video" | "audio" | "text";
 
-/** 将后端的 4 种 source 映射为前端的 3 类展示 */
-function sourceCategory(s: string, type: string): "upload" | "image" | "video" {
+/** 将后端的 type 映射为前端的分类展示 */
+function sourceCategory(s: string, type: string): "upload" | "image" | "video" | "audio" | "text" {
   if (type === "video") return "video";
+  if (type === "audio") return "audio";
+  if (type === "text") return "text";
   if (s === "uploaded") return "upload";
   return "image";
 }
 
-/** source → 中文展示标签 */
+/** type → 展示标签 */
 function sourceLabel(s: string, type: string): string {
   if (type === "video") return "视频";
+  if (type === "audio") return "音频";
+  if (type === "text") return "文本";
   if (s === "uploaded") return "上传";
   return "图片";
 }
 
-/** source → badge 底色 */
+/** type → badge 底色 */
 function sourceColor(s: string, type: string): string {
   if (type === "video") return "var(--violet)";
+  if (type === "audio") return "var(--orange)";
+  if (type === "text") return "var(--cyan)";
   if (s === "uploaded") return "var(--cyan)";
   return "var(--acc)";
 }
 
 async function downloadAssetFile(asset: AssetItem) {
-  const ext = asset.type === "video" ? "mp4" : "png";
+  const extMap: Record<string, string> = {
+    video: "mp4", audio: "mp3", text: "txt", image: "png", spritesheet: "png",
+  };
+  const ext = extMap[asset.type] || "png";
   const filename = `${asset.id}.${ext}`;
   const res = await fetch(`/api/assets/${encodeURIComponent(asset.id)}/raw`);
   if (!res.ok) throw new Error("download failed");
@@ -188,7 +197,11 @@ export function AssetsPage() {
           source === "upload" ? "uploaded" :
           source === "image" ? "generated,derived,ai_processed" :
           undefined,
-        type: source === "video" ? "video" : undefined,
+        type:
+          source === "video" ? "video" :
+          source === "audio" ? "audio" :
+          source === "text" ? "text" :
+          undefined,
         group_id: groupFilter ?? undefined,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
@@ -305,7 +318,7 @@ export function AssetsPage() {
             <input
               ref={fileRef}
               type="file"
-              accept="image/*,video/*"
+              accept="image/*,video/*,audio/*,.txt,.md,.json,.csv"
               className="hidden"
               onChange={onFile}
             />
@@ -333,6 +346,8 @@ export function AssetsPage() {
                 { value: "upload", label: t("assets.filter.upload", "上传") },
                 { value: "image", label: t("assets.filter.image", "图片") },
                 { value: "video", label: t("assets.filter.video", "视频") },
+                { value: "audio", label: t("assets.filter.audio", "音频") },
+                { value: "text", label: t("assets.filter.text", "文本") },
               ]}
               value={source}
               onChange={(v) => { setSource(v); setPage(0); setSelectedIds(new Set()); }}
@@ -391,6 +406,8 @@ export function AssetsPage() {
                 {list.data.items.map((a) => {
                   const sel = selectedIds.has(a.id);
                   const isVideo = a.type === "video";
+                  const isAudio = a.type === "audio";
+                  const isText = a.type === "text";
                   const cat = sourceCategory(a.source, a.type);
                   return (
                     <button
@@ -417,6 +434,19 @@ export function AssetsPage() {
                             </div>
                           </div>
                         </>
+                      ) : isAudio ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-bg-0 p-2">
+                          <div className="text-2xl mb-1">🎵</div>
+                          <div className="text-[9px] text-txt-3 text-center leading-tight line-clamp-2">
+                            {a.mime_type || "audio"}
+                          </div>
+                        </div>
+                      ) : isText ? (
+                        <div className="w-full h-full flex flex-col items-start p-2 bg-bg-0">
+                          <div className="text-[9px] text-txt-2 leading-tight whitespace-pre-wrap line-clamp-5 text-left flex-1 overflow-hidden">
+                            {a.text_preview || "(empty)"}
+                          </div>
+                        </div>
                       ) : a.thumbnail || a.uri ? (
                         <img
                           src={a.thumbnail || a.uri}
@@ -461,7 +491,7 @@ export function AssetsPage() {
                         )}
                       </div>
                       <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 bg-gradient-to-t from-black/80 text-[8.5px] font-mono text-white text-left">
-                        {isVideo ? "MP4" : `${a.width ?? "-"}×${a.height ?? "-"}`}
+                        {isVideo ? "MP4" : isAudio ? "AUDIO" : isText ? "TXT" : `${a.width ?? "-"}×${a.height ?? "-"}`}
                       </div>
                     </button>
                   );

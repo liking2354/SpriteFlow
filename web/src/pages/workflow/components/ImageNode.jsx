@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Handle, Position, useReactFlow, useStore, useUpdateNodeInternals } from "@xyflow/react";
 import { FaAngleLeft, FaAngleRight } from "react-icons/fa6";
-import { downloadFile, imageModels } from "./utility";
+import { downloadFile, imageModels, convertCosUrlToProxy } from "./utility";
 import { getRunId, getWorkflowId } from "./WorkflowStore";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import { IoClose, IoImageOutline, IoTrashOutline } from "react-icons/io5";
 import UploadNode from "./UploadNode";
+import { AssetPicker } from "../../../components/ui/AssetPicker";
 import { SlOptions } from "react-icons/sl";
 import { MdOutlineFileDownload } from "react-icons/md";
 import { HiOutlineViewGrid } from "react-icons/hi";
@@ -42,6 +43,7 @@ const ImageGeneration = ({ id, data, selected }) => {
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageMetadata, setImageMetadata] = useState({ width: 0, height: 0, size: null });
+  const [pickerOpen, setPickerOpen] = useState(false);
   const outputHistory = data.outputHistory || [];
   const prevHistoryLengthRef = useRef(outputHistory.length);
   const workflowId = getWorkflowId();
@@ -189,7 +191,7 @@ const ImageGeneration = ({ id, data, selected }) => {
   }, [data.formValues]);
 
   useEffect(() => {
-    if (data?.onDataChange && data?.selectedModel?.id !== "image-passthrough") {
+    if (data?.onDataChange) {
       data.onDataChange(id, { selectedModel, formValues, loading });
     }
   }, [selectedModel, formValues, loading]);
@@ -245,9 +247,23 @@ const ImageGeneration = ({ id, data, selected }) => {
   };
 
   const handleRunSingleNode = async () => {
-    if (!runId) {
-      toast.error("No run_id available!. Click 'Run All' button");
-      return;
+    let currentRunId = runId;
+    if (!currentRunId) {
+      try {
+        const runWorkflowId = await data.handleSaveWorkFlow();
+        if (!runWorkflowId) {
+          toast.error("Failed to save workflow before running node");
+          return;
+        }
+        const runResponse = await axios.post(`/api/workflow/${runWorkflowId}/run`, {
+          cost: generationCost
+        });
+        currentRunId = runResponse.data.run_id;
+        if (data.onRunIdCreated) data.onRunIdCreated(currentRunId);
+      } catch (err) {
+        toast.error("Failed to create run session");
+        return;
+      }
     }
     try {
       data.onDataChange(id, { isLoading: true });
@@ -277,7 +293,7 @@ const ImageGeneration = ({ id, data, selected }) => {
       }
 
       const response = await axios.post(`/api/workflow/${workflow_id}/node/${id}/run`, {
-        run_id: runId,
+        run_id: currentRunId,
         model: selectedModel.id,
         params: params,
         cost: generationCost,
@@ -414,6 +430,11 @@ const ImageGeneration = ({ id, data, selected }) => {
     ? currentOutputList[currentImageIndex]?.value || currentOutputList[0]?.value || data.resultUrl
     : data.resultUrl;
 
+  // For image-passthrough mode, use the selected image from formValues
+  const selectedImage = selectedModel?.id === "image-passthrough" 
+    ? formValues?.image_url 
+    : null;
+
   const handleImageLoad = useCallback((e) => {
     const img = e.currentTarget;
     setImageMetadata(prev => ({
@@ -423,10 +444,13 @@ const ImageGeneration = ({ id, data, selected }) => {
     }));
   }, []);
 
+  // Determine the image URL to display based on mode
+  const displayImage = selectedImage || currentOutput;
+
   useEffect(() => {
-    if (currentOutput) {
+    if (displayImage) {
       setImageMetadata(prev => ({ ...prev, size: null }));
-      fetch(currentOutput, { method: 'HEAD' })
+      fetch(convertCosUrlToProxy(displayImage), { method: 'HEAD' })
         .then(res => {
           const size = res.headers.get('content-length');
           if (size) {
@@ -440,7 +464,7 @@ const ImageGeneration = ({ id, data, selected }) => {
     } else {
       setImageMetadata({ width: 0, height: 0, size: null });
     }
-  }, [currentOutput]);
+  }, [displayImage, selectedModel?.id]);
 
   const updateWorkflowThumbnail = async (thumbnail) => {
     const workflow_id = await data.handleSaveWorkFlow();
@@ -565,8 +589,63 @@ const ImageGeneration = ({ id, data, selected }) => {
         </div>
       </div>
       {data.selectedModel?.id === "image-passthrough" ? (
-        <div className="w-full h-full flex-1">
-          <UploadNode id={id} data={data} formValues={formValues} setFormValues={setFormValues} selectedModel={selectedModel} loading={loading} uploadType="upload" acceptType="image" />
+        <div className="w-full flex-1 flex flex-col" style={{ minHeight: 180 }}>
+          <div className="flex items-center justify-end px-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className="text-[10px] px-2 py-1 rounded border border-emerald-600/30 text-emerald-400 hover:bg-emerald-600/10 transition-colors"
+            >
+              📚 {t("picker.selectFromLibrary")}
+            </button>
+          </div>
+          {displayImage && !data.isLoading ? (
+            <div style={{ width: '100%', height: '200px', position: 'relative', overflow: 'hidden', borderBottomLeftRadius: '0.75rem', borderBottomRightRadius: '0.75rem' }}
+              className="group/image">
+              <img
+                key={displayImage}
+                src={convertCosUrlToProxy(displayImage)}
+                alt="Selected"
+                onLoad={handleImageLoad}
+                onError={(e) => console.error('Image load error:', e)}
+                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'contain' }}
+              />
+              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover/image:opacity-100 transition-opacity duration-300 pointer-events-none rounded-b-xl flex flex-col justify-end">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[10px] text-white/50 uppercase tracking-tighter font-semibold">Dimensions</span>
+                    <span className="text-xs text-white font-medium tabular-nums">
+                      {imageMetadata.width} × {imageMetadata.height}
+                    </span>
+                  </div>
+                  {imageMetadata.size && (
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="text-[10px] text-white/50 uppercase tracking-tighter font-semibold">File Size</span>
+                      <span className="text-xs text-white font-medium tabular-nums">{imageMetadata.size}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="absolute top-2 right-2 z-10 text-white hover:text-red-500 bg-black/40 hover:bg-black/60 cursor-pointer px-2 py-1 rounded opacity-0 group-hover/image:opacity-100 transition-all duration-300 text-xs"
+                onClick={() => setFormValues(prev => ({ ...prev, image_url: null }))}
+              >
+                ✕
+              </button>
+            </div>
+          ) : !data.isLoading ? (
+            <UploadNode id={id} data={data} formValues={formValues} setFormValues={setFormValues} selectedModel={selectedModel} loading={loading} uploadType="upload" acceptType="image" />
+          ) : null}
+          <AssetPicker
+            open={pickerOpen}
+            onClose={() => setPickerOpen(false)}
+            onPick={(asset) => {
+              setFormValues(prev => ({ ...prev, image_url: asset.uri }));
+              setPickerOpen(false);
+            }}
+            filterType="image"
+          />
         </div>
       ) : (
         <div className="flex items-center flex-grow justify-center w-full h-full rounded transition-all duration-500">
@@ -581,7 +660,7 @@ const ImageGeneration = ({ id, data, selected }) => {
             <div className="text-red-400 text-xs font-medium p-3 bg-red-500/10 rounded-xl border border-red-500/20 m-3 w-full">
               {data.errorMsg || "Generation failed"}
             </div>
-          ) : currentOutput && !data.isLoading ? (
+          ) : displayImage && !data.isLoading ? (
             <div className="h-full w-full relative group/image">
               {currentOutputList.length > 1 && (
                 <>
@@ -610,9 +689,9 @@ const ImageGeneration = ({ id, data, selected }) => {
                 </>
               )}
               <img
-                key={currentOutput}
-                src={currentOutput}
-                alt="Generated"
+                key={displayImage}
+                src={convertCosUrlToProxy(displayImage)}
+                alt="Selected/Generated"
                 onLoad={handleImageLoad}
                 className="w-full h-full object-contain rounded-b-xl animate-in fade-in duration-500"
               />
@@ -648,7 +727,11 @@ const ImageGeneration = ({ id, data, selected }) => {
           ) : (
             <div className="flex flex-col items-center justify-center text-zinc-400 gap-2">
               <IoImageOutline size={32} />
-              <span className="text-[10px] italic">Result appeared here...</span>
+              {selectedModel?.id === "image-passthrough" ? (
+                <span className="text-[10px] italic">Select an image from the library...</span>
+              ) : (
+                <span className="text-[10px] italic">Result appeared here...</span>
+              )}
             </div>
           )}
         </div>

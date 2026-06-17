@@ -78,6 +78,7 @@ const VideoPlayer = ({
         loop={loop}
         playsInline
         preload="metadata"
+        referrerPolicy="no-referrer"
         onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
         onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)}
         onPlay={() => setIsPlaying(true)}

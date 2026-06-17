@@ -5,6 +5,7 @@ import axios from "axios";
 import AudioPlayer from "./AudioPlayer";
 import VideoPlayer from "./VideoPlayer";
 import { IoImageOutline, IoTrashOutline } from "react-icons/io5";
+import { convertCosUrlToProxy } from "./utility";
 
 const UploadNode = ({ id, data, formValues, setFormValues, selectedModel, loading, uploadType, acceptType }) => {
   const [uploading, setUploading] = useState(false);
@@ -12,6 +13,12 @@ const UploadNode = ({ id, data, formValues, setFormValues, selectedModel, loadin
   const [imageMetadata, setImageMetadata] = useState({ width: 0, height: 0, size: null });
   const videoRef = useRef(null);
   const prevFormValues = useRef(formValues);
+  const onDataChangeRef = useRef(data?.onDataChange);
+  
+  // Keep ref up to date without triggering re-renders
+  useEffect(() => {
+    onDataChangeRef.current = data?.onDataChange;
+  });
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -149,7 +156,7 @@ const UploadNode = ({ id, data, formValues, setFormValues, selectedModel, loadin
 
     if (acceptType === "image" && resultUrl) {
       setImageMetadata(prev => ({ ...prev, size: null }));
-      fetch(resultUrl, { method: 'HEAD' })
+      fetch(convertCosUrlToProxy(resultUrl), { method: 'HEAD' })
         .then(res => {
           const size = res.headers.get('content-length');
           if (size) {
@@ -164,14 +171,13 @@ const UploadNode = ({ id, data, formValues, setFormValues, selectedModel, loadin
       setImageMetadata({ width: 0, height: 0, size: null });
     }
     
-    // if (!data.formValues) return;
     const incoming = JSON.stringify(prevFormValues.current);
     const current = JSON.stringify(formValues);
     if (incoming === current) return;
     prevFormValues.current = formValues;
 
-    if (data?.onDataChange) {
-      data?.onDataChange(id, {
+    if (onDataChangeRef.current) {
+      onDataChangeRef.current(id, {
         selectedModel,
         formValues,
         loading,
@@ -179,7 +185,7 @@ const UploadNode = ({ id, data, formValues, setFormValues, selectedModel, loadin
         resultUrl: resultUrl,
       });
     }
-  }, [formValues, selectedModel, loading, id, data, acceptType]);
+  }, [formValues, selectedModel, loading, id, acceptType]);
 
   const hasFileUrl = formValues?.image_url || formValues?.video_url || formValues?.audio_url;
   const textareaRef = useRef(null);
@@ -221,7 +227,7 @@ const UploadNode = ({ id, data, formValues, setFormValues, selectedModel, loadin
                 {formValues?.video_url ? (
                   <div className="relative w-full h-full">
                     <VideoPlayer 
-                      src={formValues?.video_url}
+                      src={convertCosUrlToProxy(formValues?.video_url)}
                       autoPlay={false}
                       accentColor="#f97316"
                     />
@@ -229,7 +235,7 @@ const UploadNode = ({ id, data, formValues, setFormValues, selectedModel, loadin
                 ) : formValues?.image_url ? (
                   <div className="relative w-full h-full group/image">
                     <img
-                      src={formValues?.image_url}
+                      src={convertCosUrlToProxy(formValues?.image_url)}
                       alt="Uploaded"
                       onLoad={handleImageLoad}
                       className="w-full h-full object-contain"
@@ -255,7 +261,7 @@ const UploadNode = ({ id, data, formValues, setFormValues, selectedModel, loadin
                   <div className="w-full h-full relative group/audio flex flex-col items-center justify-center">
                     <AudioPlayer 
                       nodeId={id}
-                      src={formValues?.audio_url} 
+                      src={convertCosUrlToProxy(formValues?.audio_url)} 
                       className="flex flex-col items-center justify-center px-5 py-4 w-full h-full relative group transition-all duration-500 select-none bg-black/10 rounded-b-2xl"
                     />
                   </div>

@@ -2,14 +2,17 @@
 组件管理 & 测试 API
 
 提供:
-- GET  /api/components/list          列出所有已注册组件
-- GET  /api/components/{id}          获取单个组件详情
-- POST /api/components/{id}/test     独立测试组件（不依赖 workflow）
-- POST /api/components/{id}/validate 仅校验输入参数
+- GET  /api/components/list              列出所有已注册组件
+- GET  /api/components/{id}              获取单个组件详情
+- GET  /api/components/{id}/credentials  获取组件凭据（遮蔽后）
+- PUT  /api/components/{id}/credentials  保存组件凭据（持久化到 DB）
+- POST /api/components/{id}/test         独立测试组件（不依赖 workflow）
+- POST /api/components/{id}/validate     仅校验输入参数
 """
 
 from __future__ import annotations
 
+import json as _json
 import logging
 from typing import Any
 
@@ -106,6 +109,62 @@ async def get_component(component_id: str):
         "credential_schema": meta.credential_schema,
         "input_schema": meta.input_schema,
         "input_required": meta.input_required,
+    }
+
+
+# ============================ 凭据管理 ============================
+
+
+@router.get("/{component_id}/credentials")
+async def get_component_credentials(component_id: str):
+    """获取组件已配置的凭据（敏感字段遮蔽）"""
+    meta = ComponentRegistry.get_meta(component_id)
+    if not meta:
+        raise HTTPException(404, f"组件 {component_id} 未注册")
+
+    creds = ComponentRegistry.get_credentials(component_id)
+    masked = ComponentRegistry.mask_credentials(creds)
+    return {
+        "component_id": component_id,
+        "credentials": masked,
+        "configured": bool(creds),
+    }
+
+
+@router.put("/{component_id}/credentials")
+async def update_component_credentials(component_id: str, payload: dict[str, Any]):
+    """保存组件凭据，持久化到数据库
+
+    payload: { "credentials": { "ark_api_key": "...", "ark_base_url": "...", ... } }
+    """
+    meta = ComponentRegistry.get_meta(component_id)
+    if not meta:
+        raise HTTPException(404, f"组件 {component_id} 未注册")
+
+    creds = payload.get("credentials", {})
+    if not isinstance(creds, dict):
+        raise HTTPException(400, "credentials 字段必须为 dict")
+
+    # 写入内存
+    ComponentRegistry.set_credentials(component_id, creds)
+
+    # 持久化到 config DB
+    try:
+        from ..api.deps import get_db
+        db = get_db()
+        await db.set_config(
+            f"component_credential:{component_id}",
+            _json.dumps(creds, ensure_ascii=False),
+        )
+        logger.info(f"[ComponentCredentials] {component_id}: 凭据已保存")
+    except Exception as e:
+        logger.warning(f"[ComponentCredentials] {component_id}: DB 持久化失败（内存已更新）: {e}")
+
+    masked = ComponentRegistry.mask_credentials(creds)
+    return {
+        "component_id": component_id,
+        "credentials": masked,
+        "configured": True,
     }
 
 

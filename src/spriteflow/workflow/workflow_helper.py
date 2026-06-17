@@ -8,11 +8,12 @@ Workflow 核心业务层 — 全本地实现
 响应格式完全兼容前端接口契约。
 """
 import os
+import re
 import uuid
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Any
 from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -22,9 +23,111 @@ from sqlalchemy import select as sa_select
 from .models import Workflow, RunHistory, ModelConfig, WorkflowPreset, gen_uuid
 from .services.model_registry import get_service, get_node_schemas as local_node_schemas
 from .services.model_registry import get_api_node_schemas as local_api_schemas
+from ..components.registry import ComponentRegistry
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+
+# 模板引用正则：匹配 {{ nodeId.outputs[0].value }} 或 {{ nodeId.outputs[0].value  }}
+_TEMPLATE_REF_RE = re.compile(
+    r"^\{\{\s*(\w+)\.outputs\[(\d+)\]\.value\s*\}\}$"
+)
+
+# COS 图片 URL：桶配置为公有读后，去掉预签名查询参数即可直接访问
+_COS_BASE_URL = "https://spriteflow-1258748206.cos.ap-guangzhou.myqcloud.com"
+
+
+def _resolve_template_ref(
+    template: str, node_outputs: dict[str, list[dict[str, Any]]]
+) -> Any | None:
+    """解析模板引用 {{ nodeId.outputs[0].value }}，返回对应节点的输出值。
+
+    例如 {{ image1.outputs[0].value }} 从 image1 节点的 outputs[0].value 取值。
+    """
+    m = _TEMPLATE_REF_RE.match(template)
+    if not m:
+        return None
+    source_node_id = m.group(1)
+    index = int(m.group(2))
+    outputs = node_outputs.get(source_node_id, [])
+    if index < len(outputs):
+        return outputs[index].get("value")
+    logger.warning(
+        "[workflow] template ref %s resolved but index %d >= len(outputs)=%d",
+        template, index, len(outputs),
+    )
+    return None
+
+
+def _resolve_edge_params(
+    node: dict[str, Any],
+    node_outputs: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any]:
+    """解析节点的 params 中的模板引用，将上游节点的输出合并到 input_params。
+
+    规则：
+    - 遍历 node.params，解析 {{ nodeId.outputs[N].value }} 模板引用
+    - 如果对应 key 在 input_params 中不存在或为空，则用解析值填充
+    - 保留 input_params 中已有的值（用户手动填写优先于边缘连接）
+    """
+    input_params = dict(node.get("input_params", {}) or {})
+    params_field = node.get("params", {})
+    if not params_field:
+        return input_params
+
+    injected: dict[str, str] = {}
+    for key, value in params_field.items():
+        if not isinstance(value, str):
+            continue
+        resolved = _resolve_template_ref(value, node_outputs)
+        if resolved is not None and isinstance(resolved, str) and resolved.strip():
+            injected[key] = resolved
+
+    if not injected:
+        return input_params
+
+    # 合并：input_params 已有值优先，只有缺失的才用边缘注入
+    merged = dict(input_params)
+    merge_count = 0
+    for key, val in injected.items():
+        if key not in merged or not merged[key]:
+            merged[key] = val
+            merge_count += 1
+
+    if merge_count:
+        logger.info(
+            "[workflow] edge resolution: node=%s injected=%d keys=%s",
+            node.get("id", "?"),
+            merge_count,
+            list(injected.keys()),
+        )
+    return merged
+
+
+def _refresh_cos_urls(params: dict[str, Any]) -> dict[str, Any]:
+    """清理 input_params 中 COS URL 的过期签名查询参数。
+
+    桶配置为公有读后，去掉 ?q-sign-* 参数即可直接访问，
+    不再需要预签名 URL，也不暴露 SecretId。
+    """
+    from urllib.parse import urlparse, urlunparse
+
+    url_keys = ["image_url", "image", "video_url", "audio_url", "last_image"]
+    refreshed = dict(params)
+
+    for key in url_keys:
+        url = refreshed.get(key)
+        if isinstance(url, str) and url.startswith(_COS_BASE_URL):
+            parsed = urlparse(url)
+            if parsed.query:
+                clean_url = urlunparse(parsed._replace(query=""))
+                refreshed[key] = clean_url
+                logger.info(
+                    "[workflow] stripped COS signature for key=%s → %s",
+                    key, clean_url[:120],
+                )
+
+    return refreshed
 
 # 内存缓存：architect 结果（供轮询端点读取）
 # key = request_id, value = {nodes, edges, message, suggestions}
@@ -244,24 +347,101 @@ async def run_workflow_helper(db: AsyncSession, workflow_id: str, payload: dict)
 
     # 同步执行每个节点（简化版：不使用后台任务）
     # 实际场景建议用 BackgroundTasks
+    # 维护已执行节点的输出，用于解析下游节点的边缘引用
+    node_outputs: dict[str, list[dict[str, Any]]] = {}
+
     for node in nodes_data:
         node_id = node.get("id", "")
         try:
             model_id = node.get("model", "")
-            input_params = node.get("input_params", {})
+            category = node.get("category", "")
+            form_values = node.get("formValues", {})
 
-            service = get_service(model_id)
-            if service:
-                result = await service.generate(input_params, model=model_id)
+            # 从 input_params 读取基础参数（表单填写的值）
+            input_params_raw = node.get("input_params", {}) or form_values or {}
+
+            # 解析 params 中的模板引用（{{ upstreamNode.outputs[0].value }}），
+            # 将上游节点输出注入到 input_params 中缺失的字段
+            input_params = _resolve_edge_params(node, node_outputs)
+
+            # input_params 至少要有基础数据
+            if not input_params:
+                input_params = dict(input_params_raw)
+
+            logger.info(
+                "[workflow] executing node=%s model=%s input_keys=%s",
+                node_id, model_id, list(input_params.keys()),
+            )
+
+            # ---- passthrough 节点 ----
+            if model_id.endswith("-passthrough") or model_id in ("text-passthrough", "image-passthrough", "video-passthrough", "audio-passthrough"):
+                field_keys = ["prompt", "image_url", "video_url", "audio_url"]
+                found = False
+                for key in field_keys:
+                    if key in input_params and input_params[key]:
+                        type_map = {"prompt": "text", "image_url": "image_url", "video_url": "video_url", "audio_url": "audio_url"}
+                        output_type = type_map.get(key, "text")
+                        result = {"outputs": [{"type": output_type, "value": input_params[key]}]}
+                        status = "succeeded"
+                        found = True
+                        break
+                if not found:
+                    result = {"outputs": [{"type": "text", "value": str(input_params)}]}
+                    status = "succeeded"
+
+            # ---- utility 节点 ----
+            elif category == "utility" or model_id == "prompt-concatenator":
+                prompts = input_params.get("prompts", [])
+                if isinstance(prompts, list):
+                    prompt_val = "\n\n".join([str(p.get("value", p)) if isinstance(p, dict) else str(p) for p in prompts])
+                else:
+                    prompt_val = input_params.get("prompt", "")
+                result = {"outputs": [{"type": "text", "value": prompt_val}]}
                 status = "succeeded"
+
+            # ---- video-combiner 节点 ----
+            elif model_id == "video-combiner":
+                videos = input_params.get("videos_list", [])
+                aspect_ratio = input_params.get("aspect_ratio", "auto")
+                result = {"outputs": [{"type": "text", "value": f"Video Combiner: {len(videos)} clips, aspect_ratio={aspect_ratio}."}]}
+                status = "succeeded"
+
+            # ---- 常规 AI 服务 ----
             else:
-                result = {"outputs": [{"type": "text", "value": f"Model '{model_id}' not configured locally. Configure AI provider in .env."}]}
-                status = "failed"
+                service = get_service(model_id)
+                if service:
+                    result = await service.generate(input_params, model=model_id)
+                    status = "succeeded"
+                else:
+                    # ComponentRegistry 回退
+                    component = ComponentRegistry.get(model_id)
+                    if component:
+                        try:
+                            # 优先使用组件管理页配置的凭据，缺失回退到 .env
+                            component_credentials = ComponentRegistry.get_credentials(model_id)
+                            # 刷新 COS 预签名 URL（避免下游 API 无法下载参考图）
+                            resolved_params = _refresh_cos_urls(input_params)
+                            result = await component.execute(inputs=resolved_params, params=resolved_params, credentials=component_credentials)
+                            status = "succeeded"
+                            logger.info(f"Custom component {model_id} executed in workflow run")
+                        except Exception as comp_err:
+                            result = {"outputs": [{"type": "text", "value": f"组件执行失败: {str(comp_err)}"}]}
+                            status = "failed"
+                            logger.error(f"Custom component {model_id} failed: {comp_err}")
+                    else:
+                        result = {"outputs": [{"type": "text", "value": f"Model '{model_id}' not configured locally. Configure AI provider in .env."}]}
+                        status = "failed"
 
         except Exception as e:
             logger.error(f"Error running node {node_id}: {e}")
             result = {"outputs": [{"type": "text", "value": f"Error: {str(e)}"}]}
             status = "failed"
+
+        # 存储节点输出，供下游节点解析边缘引用
+        if result and isinstance(result, dict):
+            outputs_list = result.get("outputs", [])
+            if outputs_list:
+                node_outputs[node_id] = outputs_list
 
         # 更新运行记录
         await db.execute(
@@ -365,17 +545,44 @@ async def run_node_helper(db: AsyncSession, workflow_id: str, node_id: str, payl
             node_run.status = "succeeded"
             node_run.result = result
         else:
-            # 未配置的服务 → 返回友好提示
-            node_run.status = "failed"
-            node_run.result = {
-                "outputs": [
-                    {
-                        "type": "text",
-                        "value": f"模型 '{model_id}' 未在本地配置。请在 .env 中配置对应的 AI 提供商 (OPENAI_API_KEY / REPLICATE_API_TOKEN / OLLAMA_HOST)。"
+            # 尝试从 ComponentRegistry 查找自定义组件
+            component = ComponentRegistry.get(model_id)
+            if component:
+                try:
+                    # 优先使用组件管理页配置的凭据，缺失回退到 .env
+                    component_credentials = ComponentRegistry.get_credentials(model_id)
+                    # 刷新 COS 预签名 URL（避免下游 API 无法下载参考图）
+                    resolved_params = _refresh_cos_urls(input_params)
+                    # 自定义组件的 execute(inputs, params, credentials)
+                    # input_params 包含所有参数，组件自己区分 inputs/params
+                    result = await component.execute(
+                        inputs=resolved_params,
+                        params=resolved_params,
+                        credentials=component_credentials,
+                    )
+                    node_run.status = "succeeded"
+                    node_run.result = result
+                    logger.info(f"Custom component {model_id} executed successfully")
+                except Exception as comp_err:
+                    node_run.status = "failed"
+                    node_run.result = {
+                        "outputs": [
+                            {"type": "text", "value": f"组件执行失败: {str(comp_err)}"}
+                        ]
                     }
-                ]
-            }
-            logger.warning(f"No local service configured for model: {model_id}")
+                    logger.error(f"Custom component {model_id} failed: {comp_err}")
+            else:
+                # 未配置的服务 → 返回友好提示
+                node_run.status = "failed"
+                node_run.result = {
+                    "outputs": [
+                        {
+                            "type": "text",
+                            "value": f"模型 '{model_id}' 未在本地配置。请在 .env 中配置对应的 AI 提供商 (OPENAI_API_KEY / REPLICATE_API_TOKEN / OLLAMA_HOST)。"
+                        }
+                    ]
+                }
+                logger.warning(f"No local service configured for model: {model_id}")
 
     except HTTPException:
         raise

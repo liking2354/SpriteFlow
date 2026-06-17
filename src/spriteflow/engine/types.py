@@ -15,6 +15,7 @@ class PortType(Enum):
     SPRITESHEET = "SPRITESHEET"  # 拼好的精灵表 + 网格元数据
     PALETTE = "PALETTE"          # 调色板（颜色列表）
     VIDEO = "VIDEO"              # 视频/帧序列
+    AUDIO = "AUDIO"              # 音频数据
     STRING = "STRING"            # 字符串
     INT = "INT"                  # 整数
     FLOAT = "FLOAT"              # 浮点数

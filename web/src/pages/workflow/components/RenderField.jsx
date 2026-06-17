@@ -5,6 +5,7 @@ import { FiUpload } from "react-icons/fi";
 import { toast } from "react-hot-toast";
 import AudioPlayer from "./AudioPlayer";
 import { IoCloudUploadOutline } from "react-icons/io5";
+import { convertCosUrlToProxy } from "./utility";
 
 const RenderField = ({ fieldName, meta, idx, formValues, setFormValues, handleChange, data, modelName }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -222,12 +223,12 @@ const RenderField = ({ fieldName, meta, idx, formValues, setFormValues, handleCh
         {formValues[fieldName] && (
           <div className="flex items-center gap-2 relative group overflow-hidden self-start w-full">
             {meta.field === 'image' ? (
-              <img src={formValues[fieldName]} alt="Preview" className="w-24 h-24 object-cover border border-white/10 rounded-xl shadow-lg" width={0} height={0} />
+              <img src={convertCosUrlToProxy(formValues[fieldName])} alt="Preview" className="w-24 h-24 object-cover border border-white/10 rounded-xl shadow-lg" width={0} height={0} />
             ) : meta.field === 'video' ? (
-              <video src={formValues[fieldName]} className="w-24 h-24 object-cover border border-white/10 rounded-xl shadow-lg" />
+              <video src={convertCosUrlToProxy(formValues[fieldName])} className="w-24 h-24 object-cover border border-white/10 rounded-xl shadow-lg" />
             ) : meta.field === 'audio' && (
               <div className="flex flex-col w-full h-20 border border-white/10 rounded-xl overflow-hidden shadow-lg">
-                <AudioPlayer src={formValues[fieldName]} />
+                <AudioPlayer src={convertCosUrlToProxy(formValues[fieldName])} />
               </div>
             )}
             <button 

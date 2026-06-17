@@ -30,7 +30,9 @@
     "generate": "Generate",
     "free": "Free",
     "noResults": "No results found",
-    "noItems": "No items available"
+    "noItems": "No items available",
+    "textPreview": "Text Preview",
+    "audioPreview": "Audio Preview"
   },
   "nav": {
     "generate": "Generate",
@@ -96,7 +98,10 @@
     "all": "All",
     "upload": "Upload",
     "image": "Image",
-    "favorite": "Favorites"
+    "audio": "Audio",
+    "text": "Text",
+    "favorite": "Favorites",
+    "selectFromLibrary": "Pick from Library"
   },
   "tabs": {
     "creations": "Creations",
@@ -401,6 +406,8 @@
       "upload": "Upload",
       "image": "Image",
       "video": "Video",
+      "audio": "Audio",
+      "text": "Text",
       "uploaded": "Uploaded",
       "generated": "AI Generated",
       "derived": "Derived",

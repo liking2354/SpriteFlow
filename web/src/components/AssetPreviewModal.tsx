@@ -134,8 +134,10 @@ export function AssetPreviewModal({ asset, onClose, onDelete, onEdit, onDownload
   const containerRef = useRef<HTMLDivElement>(null);
   const isVideo = asset.type === "video";
   const isSpritesheet = asset.type === "spritesheet";
+  const isAudio = asset.type === "audio";
+  const isText = asset.type === "text";
   const atlasFrames = parseAtlasFrames(asset.provenance);
-  const isImage = asset.type === "image" || (!isVideo && !isSpritesheet);
+  const isImage = asset.type === "image" || (!isVideo && !isSpritesheet && !isAudio && !isText);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -179,8 +181,8 @@ export function AssetPreviewModal({ asset, onClose, onDelete, onEdit, onDownload
         <div className="flex items-center gap-3">
           <span className="text-[13px] font-mono text-txt-2">{asset.id}</span>
           <span className="text-[10px] px-1.5 py-0.5 rounded text-white"
-            style={{ background: isVideo ? "var(--violet)" : asset.source === "uploaded" ? "var(--cyan)" : "var(--acc)", color: "#001" }}>
-            {isVideo ? "视频" : asset.source === "uploaded" ? "上传" : "图片"}
+            style={{ background: isVideo ? "var(--violet)" : isAudio ? "var(--orange)" : isText ? "var(--cyan)" : asset.source === "uploaded" ? "var(--cyan)" : "var(--acc)", color: "#001" }}>
+            {isVideo ? "视频" : isAudio ? "音频" : isText ? "文本" : asset.source === "uploaded" ? "上传" : "图片"}
           </span>
           {asset.width && asset.height && (
             <span className="text-[11px] text-txt-3">{asset.width}×{asset.height}</span>
@@ -194,6 +196,12 @@ export function AssetPreviewModal({ asset, onClose, onDelete, onEdit, onDownload
               <Button size="xs" variant="ghost" onClick={() => setZoom((z) => Math.max(0.1, z - 0.25))}>−</Button>
               <Button size="xs" variant="ghost" onClick={resetView}>⊡</Button>
             </>
+          )}
+          {isAudio && (
+            <span className="text-[11px] text-txt-2">🎵 {t("common.audioPreview")}</span>
+          )}
+          {isText && (
+            <span className="text-[11px] text-txt-2">📝 {t("common.textPreview")}</span>
           )}
           {onEdit && (
             <Button size="xs" variant="outline" onClick={() => onEdit(asset.id)}>✎ {t("assets.preview.edit")}</Button>
@@ -228,6 +236,23 @@ export function AssetPreviewModal({ asset, onClose, onDelete, onEdit, onDownload
             className="max-w-full max-h-full rounded-lg"
             style={{ maxHeight: "calc(100vh - 100px)" }}
           />
+        ) : isAudio ? (
+          <div className="flex flex-col items-center gap-4">
+            <div className="text-6xl">🎵</div>
+            <div className="text-[13px] text-txt-2">{asset.mime_type || "audio"}</div>
+            <audio
+              src={asset.uri}
+              controls
+              autoPlay
+              className="w-[400px] max-w-full"
+            />
+          </div>
+        ) : isText ? (
+          <div className="w-full max-w-2xl max-h-[70vh] overflow-auto bg-bg-0 rounded-lg border border-line p-4">
+            <pre className="text-[13px] text-txt-1 whitespace-pre-wrap font-mono leading-relaxed text-left">
+              {asset.text_preview || "(empty)"}
+            </pre>
+          </div>
         ) : isSpritesheet && atlasFrames ? (
           <SpritesheetPlayer src={asset.uri} frames={atlasFrames} onClose={onClose} />
         ) : isImage ? (

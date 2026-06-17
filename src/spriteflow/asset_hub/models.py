@@ -13,7 +13,7 @@ class Asset(BaseModel):
     """统一素材模型"""
 
     id: str = Field(default_factory=lambda: datetime.now().strftime("%Y%m%d%H%M%S%f"))
-    type: Literal["image", "video", "spritesheet"] = "image"
+    type: Literal["image", "video", "audio", "text", "spritesheet"] = "image"
     source: Literal["uploaded", "generated", "derived", "ai_processed"] = "uploaded"
     uri: str = ""                     # COS 对象路径
     hash: str = ""                    # 内容哈希（去重 + 缓存寻址）
@@ -25,6 +25,9 @@ class Asset(BaseModel):
     group_id: str | None = None       # 归属分组
     provenance: dict | None = None    # 生成它的管线 id + 参数快照
     favorite: bool = False             # 是否收藏
+    text_preview: str | None = None   # 文本素材预览片段（前200字符）
+    duration: float | None = None     # 音视频时长（秒）
+    mime_type: str | None = None      # MIME 类型（如 text/plain, audio/mpeg）
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -112,6 +115,9 @@ CREATE TABLE IF NOT EXISTS assets (
     provenance  TEXT,
     favorite    INTEGER NOT NULL DEFAULT 0,
     group_id    TEXT,
+    text_preview TEXT,
+    duration    REAL,
+    mime_type   TEXT,
     created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_assets_hash ON assets(hash);

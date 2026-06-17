@@ -34,6 +34,9 @@ class AssetResponse(BaseModel):
     group_id: str | None = None
     provenance: dict | None = None
     favorite: bool = False
+    text_preview: str | None = None
+    duration: float | None = None
+    mime_type: str | None = None
     created_at: str
 
 
@@ -85,6 +88,9 @@ async def _asset_to_response(asset: Asset) -> AssetResponse:
         group_id=asset.group_id,
         provenance=asset.provenance,
         favorite=asset.favorite,
+        text_preview=asset.text_preview,
+        duration=asset.duration,
+        mime_type=asset.mime_type,
         created_at=asset.created_at,
     )
 
@@ -117,22 +123,48 @@ async def upload_asset(
     parent_id: str | None = Form(None),
     group_id: str | None = Form(None),
 ):
-    """上传素材（走 Ingest Pipeline → COS）"""
+    """上传素材（走 Ingest Pipeline → COS）
+
+    支持图片（image/*）、视频（video/*）、音频（audio/*）和文本（text/plain）。
+    """
     db = get_db()
     storage = get_storage()
 
     data = await file.read()
     tag_list = tags.split(",") if tags else []
+    content_type = file.content_type or ""
 
     pipeline = IngestPipeline(storage, db)
-    asset = await pipeline.ingest(
-        data=data,
-        filename=file.filename or "",
-        source="uploaded",
-        tags=tag_list,
-        parent_id=parent_id,
-        group_id=group_id,
-    )
+
+    # 根据 Content-Type 分发到不同的 ingest 方法
+    if content_type.startswith("text/plain"):
+        content = data.decode("utf-8")
+        asset = await pipeline.ingest_text(
+            content=content,
+            filename=file.filename or "",
+            source="uploaded",
+            tags=tag_list,
+            parent_id=parent_id,
+            group_id=group_id,
+        )
+    elif content_type.startswith("audio/"):
+        asset = await pipeline.ingest_audio(
+            data=data,
+            filename=file.filename or "",
+            source="uploaded",
+            tags=tag_list,
+            parent_id=parent_id,
+            group_id=group_id,
+        )
+    else:
+        asset = await pipeline.ingest(
+            data=data,
+            filename=file.filename or "",
+            source="uploaded",
+            tags=tag_list,
+            parent_id=parent_id,
+            group_id=group_id,
+        )
 
     return await _asset_to_response(asset)
 

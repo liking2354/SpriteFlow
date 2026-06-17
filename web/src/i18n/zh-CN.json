@@ -30,7 +30,9 @@
     "generate": "生成",
     "free": "免费",
     "noResults": "未找到结果",
-    "noItems": "暂无项目"
+    "noItems": "暂无项目",
+    "textPreview": "文本预览",
+    "audioPreview": "音频预览"
   },
   "nav": {
     "generate": "快捷生图",
@@ -103,7 +105,10 @@
     "all": "全部",
     "upload": "上传",
     "image": "图片",
-    "favorite": "我的收藏"
+    "audio": "音频",
+    "text": "文本",
+    "favorite": "我的收藏",
+    "selectFromLibrary": "从素材库选择"
   },
   "tabs": {
     "creations": "创作记录",
@@ -408,6 +413,8 @@
       "upload": "上传",
       "image": "图片",
       "video": "视频",
+      "audio": "音频",
+      "text": "文本",
       "uploaded": "上传",
       "generated": "AI 生成",
       "derived": "派生",

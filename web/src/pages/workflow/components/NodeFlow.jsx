@@ -27,7 +27,7 @@ import TextGeneration from "./TextNode";
 import ImageGeneration from "./ImageNode";
 import VideoGeneration from "./VideoNode";
 import { setWorkflowIds } from "./WorkflowStore";
-import { apiNodeModels, audioModels, concatModels, imageModels, textModels, videoModels, videoCombinerModels } from "./utility";
+import { apiNodeModels, audioModels, concatModels, imageModels, textModels, videoModels, videoCombinerModels, convertCosUrlToProxy } from "./utility";
 import { Link } from "react-router-dom";
 import RenderField from "./RenderField";
 import PromptConcate from "./PromptConcate";
@@ -224,6 +224,37 @@ const processWorkflowData = (workflowData, nodeSchemas, id) => {
       category: workflowData?.category || "General"
     }
   };
+};
+
+/** 属性分组折叠组件 — 用于 Workflow 属性面板 */
+const PropertyGroupSection = ({ groupName, count, defaultOpen, children }) => {
+  const [open, setOpen] = React.useState(defaultOpen);
+  return (
+    <div className="rounded-lg border border-white/5 overflow-hidden">
+      <button
+        type="button"
+        suppressHydrationWarning={true}
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-1.5 text-left hover:bg-white/5 transition"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-semibold text-zinc-400">{groupName}</span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-medium">
+            {count}
+          </span>
+        </div>
+        <FaAngleDown
+          size={10}
+          className={`transition-transform duration-200 text-zinc-500 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className="px-2 pb-2 flex flex-col gap-1">
+          {children}
+        </div>
+      )}
+    </div>
+  );
 };
 
 const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
@@ -1737,6 +1768,10 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
       runNodeFromFlow,
       runNodeInputsFromFlow,
       runId,
+      onRunIdCreated: (newRunId) => {
+        setRunId(newRunId);
+        setWorkflowIds(workflowId, newRunId);
+      },
       duplicateNode,
       setNodes,
       setEdges,
@@ -2708,9 +2743,27 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
                         })}
                       </div>
                     ) : (inputSchema?.properties || (inputSchema && Object.keys(inputSchema).length > 0)) ? (
-                      Object.entries(inputSchema?.properties || inputSchema).map(([key, meta], idx) => {
-                        if (key === "schemas") return null;
-                        return (
+                      (() => {
+                        const properties = inputSchema?.properties || inputSchema;
+                        const entries = Object.entries(properties).filter(([key]) => key !== "schemas");
+                        // 按 ui:group 分组属性
+                        const groups = new Map();
+                        for (const [key, meta] of entries) {
+                          const group = meta?.["ui:group"] || "Default";
+                          if (!groups.has(group)) groups.set(group, []);
+                          groups.get(group).push([key, meta]);
+                        }
+                        const hasGroups = groups.size > 1;
+                        // 分组排序：基础参数排最前
+                        const orderedGroups = Array.from(groups.keys()).sort((a, b) => {
+                          if (a === "基础参数" || a === "Basic") return -1;
+                          if (b === "基础参数" || b === "Basic") return 1;
+                          if (a === "Default") return 1;
+                          if (b === "Default") return -1;
+                          return a.localeCompare(b);
+                        });
+
+                        const renderField = (key, meta, idx) => (
                           <RenderField
                             key={key}
                             fieldName={key}
@@ -2740,7 +2793,29 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
                             modelName={selectedNode?.data?.selectedModel?.name}
                           />
                         );
-                      }).filter(Boolean)
+
+                        if (hasGroups) {
+                          return (
+                            <div className="flex flex-col gap-1 w-full">
+                              {orderedGroups.map((groupName) => {
+                                const fields = groups.get(groupName) || [];
+                                return (
+                                  <PropertyGroupSection
+                                    key={`group-${groupName}`}
+                                    groupName={groupName}
+                                    count={fields.length}
+                                    defaultOpen={groupName === "基础参数" || groupName === "Basic"}
+                                  >
+                                    {fields.map(([key, meta], idx) => renderField(key, meta, idx))}
+                                  </PropertyGroupSection>
+                                );
+                              })}
+                            </div>
+                          );
+                        }
+
+                        return entries.map(([key, meta], idx) => renderField(key, meta, idx));
+                      })()
                     ) : (
                       <div className="text-center py-8">
                         <p className="text-sm text-gray-400">{t('editor.noProperties')}</p>
@@ -2910,7 +2985,7 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
                     </div>
                     {preset.image && (
                       <div className="absolute inset-0 z-0 w-full h-full rounded overflow-hidden border border-gray-800">
-                        <img src={preset.image} alt="" className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
+                        <img src={convertCosUrlToProxy(preset.image)} alt="" className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
                         <div className="absolute inset-0 z-10 w-full h-full bg-black/60"></div>
                       </div>
                     )}

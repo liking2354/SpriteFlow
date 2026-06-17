@@ -8,10 +8,11 @@
  * - 查看运行结果
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineLoading, AiOutlinePlayCircle, AiOutlineCheckCircle, AiOutlineCloseCircle } from "react-icons/ai";
 import { FiExternalLink } from "react-icons/fi";
+import { CollapsibleSection, groupPropertiesByUiGroup, getOrderedGroupNames } from "../../components/ui/CollapsibleSection";
 
 /* ============================================================
    Type Helpers
@@ -275,6 +276,7 @@ function CredentialSection({ comp }: { comp: ComponentInfo }) {
   if (!credSchema?.properties) return null;
 
   const [credentials, setCredentials] = useState<Record<string, string>>(() => {
+    // 初始值：先用本地缓存填充默认值
     const saved = loadCredentials(comp.component_id);
     const defaults: Record<string, string> = {};
     Object.entries(credSchema.properties).forEach(([key, prop]) => {
@@ -282,40 +284,141 @@ function CredentialSection({ comp }: { comp: ComponentInfo }) {
     });
     return defaults;
   });
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  // 挂载时从服务端加载已持久化的凭据
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/components/${comp.component_id}/credentials`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.configured && data.credentials) {
+          // 服务端有凭据 → 优先使用（反向同步到 localStorage）
+          const serverCreds: Record<string, string> = {};
+          Object.entries(credSchema.properties).forEach(([key, prop]) => {
+            // 服务端返回的是遮蔽后的值，但我们需要明文
+            // 服务端不返回明文，所以只更新有本地缓存的部分
+            const localVal = loadCredentials(comp.component_id)?.[key];
+            serverCreds[key] = localVal ?? String(prop.default ?? "");
+          });
+          // 保留本地已填写的值，标记为已配置
+          setCredentials(serverCreds);
+          setSaveStatus("saved");
+        }
+      })
+      .catch(() => { /* 忽略加载错误 */ });
+    return () => { cancelled = true; };
+  }, [comp.component_id, credSchema.properties]);
 
   const handleChange = (key: string, value: string) => {
     const next = { ...credentials, [key]: value };
     setCredentials(next);
     saveCredentials(comp.component_id, next);
+    if (saveStatus === "saved") setSaveStatus("idle");
   };
+
+  const handleSave = async () => {
+    setSaveStatus("saving");
+    try {
+      const res = await fetch(`/api/components/${comp.component_id}/credentials`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credentials }),
+      });
+      if (!res.ok) throw new Error("保存失败");
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 3000);
+    } catch {
+      setSaveStatus("error");
+    }
+  };
+
+  // 按 ui:group 分组凭据属性
+  const credGroups = useMemo(() => groupPropertiesByUiGroup(credSchema.properties), [credSchema.properties]);
+  const hasGroups = credGroups.size > 1;
 
   return (
     <div>
-      <h3 className="text-xs font-semibold mb-3 flex items-center gap-2" style={{ color: "var(--txt-2)" }}>
-        <span className="w-1 h-3 rounded-full" style={{ background: "var(--amber)" }} />
-        {t("components.credential")}
-      </h3>
-      <div className="space-y-3">
-        {Object.entries(credSchema.properties).map(([key, prop]) => (
-          <div key={key}>
-            <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--txt-2)" }}>
-              {prop.title || key}
-            </label>
-            <input
-              type={prop.format === "password" ? "password" : "text"}
-              value={credentials[key] ?? ""}
-              onChange={(e) => handleChange(key, e.target.value)}
-              className="w-full px-3 py-2 rounded-lg text-xs font-mono border transition focus:outline-none"
-              style={{
-                background: "var(--bg-0)",
-                borderColor: "var(--line)",
-                color: "var(--txt-0)",
-              }}
-              placeholder={prop.description || key}
-            />
-          </div>
-        ))}
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-semibold flex items-center gap-2" style={{ color: "var(--txt-2)" }}>
+          <span className="w-1 h-3 rounded-full" style={{ background: "var(--amber)" }} />
+          {t("components.credential")}
+        </h3>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saveStatus === "saving"}
+          className="text-[10px] px-3 py-1 rounded-md border font-medium transition disabled:opacity-50"
+          style={{
+            borderColor: saveStatus === "saved" ? "var(--green)" : "var(--acc)",
+            color: saveStatus === "saved" ? "var(--green)" : "var(--acc)",
+            background: saveStatus === "saved" ? "rgba(34,197,94,0.08)" : "var(--acc-soft)",
+          }}
+        >
+          {saveStatus === "saving"
+            ? t("common.saving", "保存中...")
+            : saveStatus === "saved"
+            ? t("common.saved", "已保存 ✓")
+            : saveStatus === "error"
+            ? t("common.saveError", "保存失败")
+            : t("common.save", "保存到服务端")}
+        </button>
       </div>
+      {hasGroups ? (
+        <div className="space-y-2">
+          {getOrderedGroupNames(credGroups).map((groupName) => {
+            const entries = credGroups.get(groupName) || [];
+            return (
+              <CollapsibleSection key={groupName} title={groupName} count={entries.length} defaultOpen={groupName === "基础参数"}>
+                <div className="space-y-3">
+                  {entries.map(([key, prop]) => (
+                    <div key={key}>
+                      <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--txt-2)" }}>
+                        {prop.title || key}
+                      </label>
+                      <input
+                        type={prop.format === "password" ? "password" : "text"}
+                        value={credentials[key] ?? ""}
+                        onChange={(e) => handleChange(key, e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg text-xs font-mono border transition focus:outline-none"
+                        style={{
+                          background: "var(--bg-0)",
+                          borderColor: "var(--line)",
+                          color: "var(--txt-0)",
+                        }}
+                        placeholder={prop.description || key}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleSection>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {Object.entries(credSchema.properties).map(([key, prop]) => (
+            <div key={key}>
+              <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--txt-2)" }}>
+                {prop.title || key}
+              </label>
+              <input
+                type={prop.format === "password" ? "password" : "text"}
+                value={credentials[key] ?? ""}
+                onChange={(e) => handleChange(key, e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-xs font-mono border transition focus:outline-none"
+                style={{
+                  background: "var(--bg-0)",
+                  borderColor: "var(--line)",
+                  color: "var(--txt-0)",
+                }}
+                placeholder={prop.description || key}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -397,12 +500,22 @@ function TestSection({ comp }: { comp: ComponentInfo }) {
     handleParamChange("seed", Math.floor(Math.random() * 9_000_000_000) + 1_000_000_000);
   };
 
-  // 按时长模式过滤字段
-  const visibleFields = Object.entries(inputSchema).filter(([key]) => {
-    if (key === "duration_seconds" && mode !== "seconds") return false;
-    if (key === "duration_frames" && mode !== "frames") return false;
-    return true;
-  });
+  // 按时长模式过滤并构建分组用的 schema
+  const filteredSchema = useMemo(() => {
+    const result: Record<string, PropertyDef> = {};
+    Object.entries(inputSchema).forEach(([key, prop]) => {
+      if (key === "duration_seconds" && mode !== "seconds") return;
+      if (key === "duration_frames" && mode !== "frames") return;
+      result[key] = prop;
+    });
+    return result;
+  }, [inputSchema, mode]);
+
+  const visibleEntries = useMemo(() => Object.entries(filteredSchema), [filteredSchema]);
+
+  // 按 ui:group 分组
+  const inputGroups = useMemo(() => groupPropertiesByUiGroup(filteredSchema), [filteredSchema]);
+  const hasInputGroups = inputGroups.size > 1;
 
   return (
     <div>
@@ -411,36 +524,77 @@ function TestSection({ comp }: { comp: ComponentInfo }) {
         {t("components.testForm")}
       </h3>
 
-      {/* Form Fields */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-        {visibleFields.map(([key, prop]) => (
-          <div key={key} className={key === "prompt" || key === "image_url" ? "sm:col-span-2" : ""}>
-            <FormField
-              name={key}
-              prop={prop}
-              value={params[key]}
-              onChange={(v) => handleParamChange(key, v)}
-              extra={
-                key === "seed" ? (
-                  <button
-                    type="button"
-                    onClick={randomizeSeed}
-                    className="text-[10px] px-2 py-0.5 rounded border transition hover:brightness-110 shrink-0"
-                    style={{
-                      borderColor: "var(--line)",
-                      color: "var(--txt-2)",
-                      background: "var(--bg-2)",
-                    }}
-                    title="随机生成 10 位种子值"
-                  >
-                    随机
-                  </button>
-                ) : undefined
-              }
-            />
-          </div>
-        ))}
-      </div>
+      {/* Form Fields — grouped if ui:group is present */}
+      {hasInputGroups ? (
+        <div className="space-y-2 mb-4">
+          {getOrderedGroupNames(inputGroups).map((groupName) => {
+            const entries = inputGroups.get(groupName) || [];
+            return (
+              <CollapsibleSection key={groupName} title={groupName} count={entries.length} defaultOpen={groupName === "基础参数"}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {entries.map(([key, prop]) => (
+                    <div key={key} className={key === "prompt" || key === "image_url" ? "sm:col-span-2" : ""}>
+                      <FormField
+                        name={key}
+                        prop={prop}
+                        value={params[key]}
+                        onChange={(v) => handleParamChange(key, v)}
+                        extra={
+                          key === "seed" ? (
+                            <button
+                              type="button"
+                              onClick={randomizeSeed}
+                              className="text-[10px] px-2 py-0.5 rounded border transition hover:brightness-110 shrink-0"
+                              style={{
+                                borderColor: "var(--line)",
+                                color: "var(--txt-2)",
+                                background: "var(--bg-2)",
+                              }}
+                              title="随机生成 10 位种子值"
+                            >
+                              随机
+                            </button>
+                          ) : undefined
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleSection>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          {visibleEntries.map(([key, prop]) => (
+            <div key={key} className={key === "prompt" || key === "image_url" ? "sm:col-span-2" : ""}>
+              <FormField
+                name={key}
+                prop={prop}
+                value={params[key]}
+                onChange={(v) => handleParamChange(key, v)}
+                extra={
+                  key === "seed" ? (
+                    <button
+                      type="button"
+                      onClick={randomizeSeed}
+                      className="text-[10px] px-2 py-0.5 rounded border transition hover:brightness-110 shrink-0"
+                      style={{
+                        borderColor: "var(--line)",
+                        color: "var(--txt-2)",
+                        background: "var(--bg-2)",
+                      }}
+                      title="随机生成 10 位种子值"
+                    >
+                      随机
+                    </button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div className="flex items-center gap-3 flex-wrap">

@@ -12,15 +12,18 @@ interface Props {
   onClose: () => void;
   onPick: (asset: AssetItem) => void;
   multi?: boolean;
+  filterType?: string;   // 按素材类型预筛选（image/video/audio/text）
 }
 
-type Filter = "all" | "upload" | "image" | "favorite";
+type Filter = "all" | "upload" | "image" | "audio" | "text" | "favorite";
 
 const PAGE_SIZE = 30;
 
 /** 分类显示标签 */
 function badgeLabel(a: AssetItem): string {
   if (a.type === "video") return "视频";
+  if (a.type === "audio") return "音频";
+  if (a.type === "text") return "文本";
   if (a.source === "uploaded") return "上传";
   return "图片";
 }
@@ -28,16 +31,19 @@ function badgeLabel(a: AssetItem): string {
 /** 分类 badge 底色 */
 function badgeColor(a: AssetItem): string {
   if (a.type === "video") return "var(--violet)";
+  if (a.type === "audio") return "var(--orange)";
+  if (a.type === "text") return "var(--cyan)";
   if (a.source === "uploaded") return "var(--cyan)";
   return "var(--acc)";
 }
 
-export function AssetPicker({ open, onClose, onPick, multi: _ }: Props) {
+export function AssetPicker({ open, onClose, onPick, multi: _, filterType }: Props) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState<Filter>("all");
   const [page, setPage] = useState(0);
 
-  const queryKey = ["asset-picker", filter, page];
+  const actualFilterType = filterType || "";
+  const queryKey = ["asset-picker", filter, page, actualFilterType];
 
   const { data, isLoading } = useQuery({
     queryKey,
@@ -45,7 +51,13 @@ export function AssetPicker({ open, onClose, onPick, multi: _ }: Props) {
       const p: any = { limit: PAGE_SIZE, offset: page * PAGE_SIZE };
       if (filter === "upload") p.source = "uploaded";
       else if (filter === "image") p.source = "generated,derived,ai_processed";
+      else if (filter === "audio") p.type = "audio";
+      else if (filter === "text") p.type = "text";
       if (filter === "favorite") p.favorite = true;
+      // 当有 filterType 预筛选且用户未手动选择分类时，应用预筛选
+      if (actualFilterType && filter === "all") {
+        p.type = actualFilterType;
+      }
       return api.listAssets(p);
     },
     enabled: open,
@@ -74,11 +86,13 @@ export function AssetPicker({ open, onClose, onPick, multi: _ }: Props) {
             {t("picker.title")}
           </div>
           <Segment
-            className="ml-auto !w-[360px]"
+            className="ml-auto !w-[440px]"
             items={[
               { value: "all", label: t("picker.all") },
               { value: "upload", label: t("picker.upload", "上传") },
               { value: "image", label: t("picker.image", "图片") },
+              { value: "audio", label: t("picker.audio", "音频") },
+              { value: "text", label: t("picker.text", "文本") },
               { value: "favorite", label: t("picker.favorite") },
             ]}
             value={filter}
@@ -114,7 +128,22 @@ export function AssetPicker({ open, onClose, onPick, multi: _ }: Props) {
                   }}
                   className="group relative aspect-square overflow-hidden rounded-m border border-line bg-bg-0 hover:border-[var(--acc)] transition-colors"
                 >
-                  {a.thumbnail || a.uri ? (
+                  {a.type === "video" ? (
+                    <video src={a.uri} className="w-full h-full object-cover" muted preload="metadata" />
+                  ) : a.type === "audio" ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-bg-0 p-2">
+                      <div className="text-xl mb-1">🎵</div>
+                      <div className="text-[9px] text-txt-3 text-center leading-tight">
+                        {a.mime_type || "audio"}
+                      </div>
+                    </div>
+                  ) : a.type === "text" ? (
+                    <div className="w-full h-full flex flex-col items-start p-2 bg-bg-0">
+                      <div className="text-[9px] text-txt-2 leading-tight whitespace-pre-wrap line-clamp-5 text-left flex-1 overflow-hidden">
+                        {a.text_preview || "(empty)"}
+                      </div>
+                    </div>
+                  ) : a.thumbnail || a.uri ? (
                     <img
                       src={a.thumbnail || a.uri}
                       alt={a.id}
@@ -134,7 +163,7 @@ export function AssetPicker({ open, onClose, onPick, multi: _ }: Props) {
                     </span>
                   </div>
                   <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-gradient-to-t from-black/80 text-[9.5px] font-mono text-white text-left">
-                    {a.type === "video" ? "MP4" : `${a.width ?? "-"}×${a.height ?? "-"}`}
+                    {a.type === "video" ? "MP4" : a.type === "audio" ? "AUDIO" : a.type === "text" ? "TXT" : `${a.width ?? "-"}×${a.height ?? "-"}`}
                   </div>
                 </button>
               ))}

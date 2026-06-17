@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Handle, Position, useReactFlow, useStore, useUpdateNodeInternals } from "@xyflow/react";
 import { FaAngleLeft, FaAngleRight } from "react-icons/fa6";
-import { apiNodeModels } from "./utility";
+import { apiNodeModels, convertCosUrlToProxy } from "./utility";
 import { getRunId, getWorkflowId } from "./WorkflowStore";
 import axios from "axios";
 import { toast } from "react-hot-toast";
@@ -389,9 +389,23 @@ const ApiNode = ({ id, data, selected }) => {
   };
 
   const handleRunSingleNode = async () => {
-    if (!runId) {
-      toast.error("No run_id available!. Click 'Run All' button");
-      return;
+    let currentRunId = runId;
+    if (!currentRunId) {
+      try {
+        const runWorkflowId = await data.handleSaveWorkFlow();
+        if (!runWorkflowId) {
+          toast.error("Failed to save workflow before running node");
+          return;
+        }
+        const runResponse = await axios.post(`/api/workflow/${runWorkflowId}/run`, {
+          cost: 0.025
+        });
+        currentRunId = runResponse.data.run_id;
+        if (data.onRunIdCreated) data.onRunIdCreated(currentRunId);
+      } catch (err) {
+        toast.error("Failed to create run session");
+        return;
+      }
     }
     try {
       data.onDataChange(id, { isLoading: true });
@@ -428,7 +442,7 @@ const ApiNode = ({ id, data, selected }) => {
 
       const response = await axios.post(`/api/workflow/${workflow_id}/node/${id}/run`,
         {
-          run_id: runId,
+          run_id: currentRunId,
           model: selectedModel.id,
           params: params,
           cost: 0.025,
@@ -679,13 +693,13 @@ const ApiNode = ({ id, data, selected }) => {
             <div className="flex-1 w-full h-full flex flex-col items-center justify-center">
               {currentOutputList[currentOutputIndex]?.type === 'video_url' ? (
                 <video
-                  src={currentOutput}
+                  src={convertCosUrlToProxy(currentOutput)}
                   controls
                   className="w-full h-full rounded-md object-contain"
                 />
               ) : (currentOutputList[currentOutputIndex]?.type === 'image_url' || currentOutputList[currentOutputIndex]?.type === 'image') ? (
                 <img
-                  src={currentOutput}
+                  src={convertCosUrlToProxy(currentOutput)}
                   alt="Generated"
                   className="w-full h-full rounded-md object-contain"
                 />

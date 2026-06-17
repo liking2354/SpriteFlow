@@ -7,6 +7,7 @@ import { getRunId, getWorkflowId } from "./WorkflowStore";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import UploadNode from "./UploadNode";
+import { AssetPicker } from "../../../components/ui/AssetPicker";
 import { SlOptions } from "react-icons/sl";
 import { MdOutlineFileDownload } from "react-icons/md";
 import NodeSendButton from "./NodeSendButton";
@@ -48,6 +49,7 @@ const VideoGeneration = ({ id, data, selected }) => {
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1);
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const videoRef = useRef(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const outputHistory = data.outputHistory || [];
   const prevHistoryLengthRef = useRef(outputHistory.length);
   const workflowId = getWorkflowId();
@@ -261,9 +263,23 @@ const VideoGeneration = ({ id, data, selected }) => {
   };
 
   const handleRunSingleNode = async () => {
-    if (!runId) {
-      toast.error("No run_id available!. Click 'Run All' button");
-      return;
+    let currentRunId = runId;
+    if (!currentRunId) {
+      try {
+        const runWorkflowId = await data.handleSaveWorkFlow();
+        if (!runWorkflowId) {
+          toast.error("Failed to save workflow before running node");
+          return;
+        }
+        const runResponse = await axios.post(`/api/workflow/${runWorkflowId}/run`, {
+          cost: generationCost
+        });
+        currentRunId = runResponse.data.run_id;
+        if (data.onRunIdCreated) data.onRunIdCreated(currentRunId);
+      } catch (err) {
+        toast.error("Failed to create run session");
+        return;
+      }
     }
     try {
       data.onDataChange(id, { isLoading: true });
@@ -293,7 +309,7 @@ const VideoGeneration = ({ id, data, selected }) => {
       }
 
       const response = await axios.post(`/api/workflow/${workflow_id}/node/${id}/run`, {
-        run_id: runId,
+        run_id: currentRunId,
         model: selectedModel.id,
         params: params,
         cost: generationCost,
@@ -540,7 +556,25 @@ const VideoGeneration = ({ id, data, selected }) => {
       </div>
       {data.selectedModel?.id === "video-passthrough" ? (
         <div className="w-full h-full flex-1">
+          <div className="flex items-center justify-end px-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className="text-[10px] px-2 py-1 rounded border border-orange-600/30 text-orange-400 hover:bg-orange-600/10 transition-colors"
+            >
+              📚 {t("picker.selectFromLibrary")}
+            </button>
+          </div>
           <UploadNode id={id} data={data} formValues={formValues} setFormValues={setFormValues} selectedModel={selectedModel} loading={loading} uploadType="upload" acceptType="video" />
+          <AssetPicker
+            open={pickerOpen}
+            onClose={() => setPickerOpen(false)}
+            onPick={(asset) => {
+              setFormValues(prev => ({ ...prev, video_url: asset.uri }));
+              setPickerOpen(false);
+            }}
+            filterType="video"
+          />
         </div>
       ) : (
         <div className="flex items-center flex-grow justify-center w-full h-full rounded transition-all duration-500">

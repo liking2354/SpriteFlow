@@ -235,9 +235,23 @@ const VideoCombiner = ({ id, data, selected }) => {
   };
 
   const handleRunSingleNode = async () => {
-    if (!runId) {
-      toast.error("No run_id available!. Click 'Run All' button");
-      return;
+    let currentRunId = runId;
+    if (!currentRunId) {
+      try {
+        const runWorkflowId = await data.handleSaveWorkFlow();
+        if (!runWorkflowId) {
+          toast.error("Failed to save workflow before running node");
+          return;
+        }
+        const runResponse = await axios.post(`/api/workflow/${runWorkflowId}/run`, {
+          cost: generationCost
+        });
+        currentRunId = runResponse.data.run_id;
+        if (data.onRunIdCreated) data.onRunIdCreated(currentRunId);
+      } catch (err) {
+        toast.error("Failed to create run session");
+        return;
+      }
     }
     try {
       data.onDataChange(id, { isLoading: true });
@@ -267,7 +281,7 @@ const VideoCombiner = ({ id, data, selected }) => {
       }
 
       const response = await axios.post(`/api/workflow/${workflow_id}/node/${id}/run`, {
-        run_id: runId,
+        run_id: currentRunId,
         model: selectedModel.id,
         params: params,
         cost: generationCost,

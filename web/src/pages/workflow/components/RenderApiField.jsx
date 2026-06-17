@@ -7,6 +7,7 @@ import AudioPlayer from "./AudioPlayer";
 import { IoCloudUploadOutline } from "react-icons/io5";
 import { Handle, Position } from "@xyflow/react";
 import { TbBoxModel2, TbExternalLink } from "react-icons/tb";
+import { convertCosUrlToProxy } from "./utility";
 
 const RenderApiField = ({ fieldName, meta, idx, formValues, setFormValues, handleChange, hasHandle = false, exposedHandles = [], onToggleHandle }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -303,9 +304,9 @@ const RenderApiField = ({ fieldName, meta, idx, formValues, setFormValues, handl
         {formValues[fieldName] && (
           <div className="flex items-center gap-2 relative group overflow-hidden self-start w-full">
             {isImageField || isImageUrl(value) ? (
-              <img src={value} alt="Preview" className="w-24 h-24 object-cover border border-white/10 rounded-xl shadow-lg" width={0} height={0} />
+              <img src={convertCosUrlToProxy(value)} alt="Preview" className="w-24 h-24 object-cover border border-white/10 rounded-xl shadow-lg" width={0} height={0} />
             ) : isVideoField ? (
-              <video src={value} className="w-24 h-24 object-cover border border-white/10 rounded-xl shadow-lg" />
+              <video src={convertCosUrlToProxy(value)} className="w-24 h-24 object-cover border border-white/10 rounded-xl shadow-lg" />
             ) : isAudioField && (
               <div className="flex flex-col w-full h-16 border border-white/10 rounded-xl overflow-hidden shadow-lg">
                 <AudioPlayer src={value} />
@@ -347,13 +348,13 @@ const RenderApiField = ({ fieldName, meta, idx, formValues, setFormValues, handl
             <div key={idx} className="flex items-center gap-2 relative group overflow-hidden">
               {isImageUrl(url) ? (
                 <img 
-                  src={url} 
+                  src={convertCosUrlToProxy(url)} 
                   alt="Preview" 
                   className="w-full h-full aspect-[1/1] object-cover border border-gray-500 rounded" 
                 />
               ) : (url.includes('.mp4') || url.includes('.webm')) && (
                 <video 
-                  src={url} 
+                  src={convertCosUrlToProxy(url)} 
                   className="w-full h-full aspect-[1/1] object-cover border border-gray-500 rounded" 
                 />
               )}

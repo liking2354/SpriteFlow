@@ -211,6 +211,110 @@ class IngestPipeline:
             parent_id=parent_id,
             group_id=group_id,
             provenance=provenance,
+            mime_type=content_type,
+        )
+        await self.db.create_asset(asset)
+        return asset
+
+    async def ingest_text(
+        self,
+        content: str,
+        filename: str = "",
+        source: str = "uploaded",
+        tags: list[str] | None = None,
+        parent_id: str | None = None,
+        group_id: str | None = None,
+        provenance: dict | None = None,
+    ) -> Asset:
+        """将文本内容写入 .txt 文件上传存储，并写一条 type=text 的 Asset。
+
+        text_preview 截取前 200 字符。
+        """
+        data = content.encode("utf-8")
+        content_hash = compute_content_hash(data)
+        existing = await self.db.get_asset_by_hash(content_hash)
+        if existing:
+            return existing
+
+        name = filename.rsplit(".", 1)[0] if filename else "text"
+        file_key = f"{content_hash}.txt"
+        uri = await self.storage.upload(
+            file_key, data, prefix=StoragePrefix(source),
+            content_type="text/plain; charset=utf-8",
+        )
+
+        preview = content[:200] if len(content) > 200 else content
+
+        asset = Asset(
+            type="text",
+            source=source,
+            uri=uri,
+            hash=content_hash,
+            width=None,
+            height=None,
+            thumbnail=None,
+            tags=tags or [],
+            parent_id=parent_id,
+            group_id=group_id,
+            provenance=provenance,
+            text_preview=preview,
+            mime_type="text/plain",
+        )
+        await self.db.create_asset(asset)
+        return asset
+
+    async def ingest_audio(
+        self,
+        data: bytes,
+        filename: str = "",
+        source: str = "uploaded",
+        tags: list[str] | None = None,
+        parent_id: str | None = None,
+        group_id: str | None = None,
+        provenance: dict | None = None,
+    ) -> Asset:
+        """将音频文件上传存储，并写一条 type=audio 的 Asset。
+
+        从文件扩展名推断 mime_type。
+        """
+        content_hash = compute_content_hash(data)
+        existing = await self.db.get_asset_by_hash(content_hash)
+        if existing:
+            return existing
+
+        # 从文件名推断扩展名和 MIME 类型
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "mp3"
+        mime_map = {
+            "mp3": "audio/mpeg",
+            "wav": "audio/wav",
+            "ogg": "audio/ogg",
+            "flac": "audio/flac",
+            "aac": "audio/aac",
+            "m4a": "audio/mp4",
+            "webm": "audio/webm",
+        }
+        content_type = mime_map.get(ext, "audio/mpeg")
+
+        file_key = f"{content_hash}.{ext}"
+        uri = await self.storage.upload(
+            file_key, data, prefix=StoragePrefix(source),
+            content_type=content_type,
+        )
+
+        asset = Asset(
+            type="audio",
+            source=source,
+            uri=uri,
+            hash=content_hash,
+            width=None,
+            height=None,
+            thumbnail=None,
+            tags=tags or [],
+            parent_id=parent_id,
+            group_id=group_id,
+            provenance=provenance,
+            duration=None,
+            mime_type=content_type,
         )
         await self.db.create_asset(asset)
         return asset

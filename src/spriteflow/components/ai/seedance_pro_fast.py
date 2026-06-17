@@ -15,6 +15,7 @@ API 文档:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import Any
 
@@ -245,6 +246,15 @@ class SeedanceProFastComponent(Component):
         prompt = inputs.get("prompt", "")
         image_url = inputs.get("image_url") or inputs.get("image") or ""
 
+        # 诊断日志：输出实际收到的参数
+        logger.info(
+            "[SeedanceProFast] inputs keys=%s, params keys=%s, has_image_url=%s, image_url_sample=%s",
+            list(inputs.keys()),
+            list(params.keys()),
+            bool(image_url),
+            image_url[:120] if image_url else "NONE",
+        )
+
         content: list[dict[str, Any]] = []
         if prompt:
             content.append({"type": "text", "text": prompt})
@@ -262,18 +272,30 @@ class SeedanceProFastComponent(Component):
             "ratio": params.get("aspect_ratio", "16:9"),
             "resolution": params.get("resolution", "720p"),
             "seed": params.get("seed", -1),
-            "camerafixed": params.get("fixed_camera", False),
+            "camera_fixed": params.get("fixed_camera", False),
         }
+
+        logger.info(
+            "[SeedanceProFast] API body: model=%s, content_len=%d, content_types=%s",
+            model,
+            len(content),
+            [c.get("type") for c in content],
+        )
 
         if params.get("num_outputs", 1) > 1:
             body["num_outputs"] = params["num_outputs"]
 
         if mode == "frames":
-            body["num_frames"] = params.get("duration_frames", 121)
+            body["frames"] = params.get("duration_frames", 29)
         else:
             body["duration"] = params.get("duration_seconds", 5)
 
         timeout = params.get("generation_timeout", 600)
+
+        logger.info(
+            "[SeedanceProFast] FULL body: %s",
+            json.dumps(body, ensure_ascii=False, default=str),
+        )
 
         logger.info(
             "[SeedanceProFast] creating task: model=%s ratio=%s resolution=%s duration_mode=%s",
