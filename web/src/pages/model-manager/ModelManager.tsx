@@ -38,6 +38,7 @@ export type ModelEntry = {
   model_id: string;
   name: string;
   category: string;
+  subcategory: string;
   service: string;
   routes: RouteItem[];
   is_default: boolean;
@@ -66,8 +67,9 @@ export function ModelManager() {
   const [channelFormOpen, setChannelFormOpen] = useState(false);
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
 
-  // Model form state（新增自定义模型）
+  // Model form state（新增/编辑自定义模型）
   const [modelFormOpen, setModelFormOpen] = useState(false);
+  const [editingModel, setEditingModel] = useState<ModelEntry | null>(null);
 
   const categories = ["text", "image", "video", "audio", "utility"];
 
@@ -199,7 +201,12 @@ export function ModelManager() {
   // ── 删除模型 ──
   const handleDeleteModel = async (modelId: string) => {
     try {
-      await axios.delete(`/api/workflow/models/nodes/${encodeURIComponent(modelId)}`);
+      // 不含 / 的 model_id 走路径参数，含 / 的走 body 参数
+      if (modelId.includes("/")) {
+        await axios.delete("/api/workflow/models/nodes", { data: { model_id: modelId } });
+      } else {
+        await axios.delete(`/api/workflow/models/nodes/${encodeURIComponent(modelId)}`);
+      }
       toast.success("模型已删除");
       loadModels();
     } catch (err: unknown) {
@@ -209,9 +216,10 @@ export function ModelManager() {
   };
 
   // ── 设置默认模型 ──
-  const handleSetDefault = async (category: string, modelId: string) => {
+  const handleSetDefault = async (category: string, modelId: string, subcategory: string = "") => {
     try {
-      const res = await axios.put(`/api/model-manager/defaults/${category}`, { model_id: modelId });
+      const params = subcategory ? `?subcategory=${encodeURIComponent(subcategory)}` : "";
+      const res = await axios.put(`/api/model-manager/defaults/${category}${params}`, { model_id: modelId });
       setDefaults(res.data.defaults || {});
       toast.success("默认模型已更新");
       loadModels(); // 刷新列表以更新 is_default 标记
@@ -227,14 +235,39 @@ export function ModelManager() {
       await axios.post("/api/workflow/models/nodes", {
         model_id: data.model_id,
         category: data.category,
+        subcategory: data.subcategory || "",
         name: data.name,
         service: data.service,
       });
       toast.success("模型已添加");
       setModelFormOpen(false);
+      setEditingModel(null);
       loadModels();
     } catch (err: unknown) {
       const msg = axios.isAxiosError(err) ? err.response?.data?.detail : "添加失败";
+      toast.error(String(msg));
+    }
+  };
+
+  // ── 编辑模型 ──
+  const handleOpenAdd = () => { setEditingModel(null); setModelFormOpen(true); };
+  const handleOpenEdit = (model: ModelEntry) => { setEditingModel(model); setModelFormOpen(true); };
+
+  const handleUpdateModel = async (data: Record<string, unknown>) => {
+    try {
+      await axios.put("/api/workflow/models/nodes/schema", {
+        model_id: data.model_id,
+        name: data.name,
+        category: data.category,
+        subcategory: data.subcategory || "",
+        service: data.service,
+      });
+      toast.success("模型已更新");
+      setModelFormOpen(false);
+      setEditingModel(null);
+      loadModels();
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err) ? err.response?.data?.detail : "更新失败";
       toast.error(String(msg));
     }
   };
@@ -286,7 +319,7 @@ export function ModelManager() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-white">模型路由</h2>
               <button
-                onClick={() => setModelFormOpen(true)}
+                onClick={handleOpenAdd}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition-colors"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
@@ -310,6 +343,7 @@ export function ModelManager() {
               onUpdateRoute={handleUpdateRoute}
               onDeleteRoute={handleDeleteRoute}
               onDeleteModel={handleDeleteModel}
+              onEditModel={handleOpenEdit}
               defaults={defaults}
               onSetDefault={handleSetDefault}
             />
@@ -326,11 +360,18 @@ export function ModelManager() {
         />
       )}
 
-      {/* 新增模型弹窗 */}
+      {/* 新增/编辑模型弹窗 */}
       {modelFormOpen && (
         <ModelForm
-          onSave={handleSaveModel}
-          onClose={() => setModelFormOpen(false)}
+          onSave={editingModel ? handleUpdateModel : handleSaveModel}
+          onClose={() => { setModelFormOpen(false); setEditingModel(null); }}
+          editData={editingModel ? {
+            model_id: editingModel.model_id,
+            name: editingModel.name,
+            category: editingModel.category,
+            subcategory: editingModel.subcategory,
+            service: editingModel.service,
+          } : null}
         />
       )}
 

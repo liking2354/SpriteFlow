@@ -87,6 +87,21 @@ async def get_nodes_visibility(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# 注意：PUT /nodes/schema 必须注册在 PUT /nodes/{model_id} 之前，避免 "schema" 被当作 model_id
+@router.put("/nodes/schema")
+async def update_node_schema(data: dict, db: AsyncSession = Depends(get_db)):
+    """更新自定义节点 Schema（model_id 通过 body 传入，避免含 / 的 ID 出现路由冲突）"""
+    try:
+        model_id = data.pop("model_id", "")
+        if not model_id:
+            raise HTTPException(status_code=400, detail="缺少 model_id")
+        return await update_custom_node(db, model_id, data)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.put("/nodes/{model_id}")
 async def update_node_visibility(model_id: str, data: dict, db: AsyncSession = Depends(get_db)):
     """更新单个节点类型的显示/隐藏状态"""
@@ -120,11 +135,15 @@ async def create_node(data: dict, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/nodes/{model_id}/schema")
-async def update_node_schema(model_id: str, data: dict, db: AsyncSession = Depends(get_db)):
-    """更新自定义节点 Schema"""
+# 注意：DELETE /nodes 必须注册在 DELETE /nodes/{model_id} 之前，避免 body-only 路由被参数化路由抢占
+@router.delete("/nodes")
+async def delete_node_by_body(data: dict, db: AsyncSession = Depends(get_db)):
+    """删除模型（model_id 通过 body 传入，支持含 / 的 ID）"""
     try:
-        return await update_custom_node(db, model_id, data)
+        model_id = data.get("model_id", "")
+        if not model_id:
+            raise HTTPException(status_code=400, detail="缺少 model_id")
+        return await soft_delete_model(db, model_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

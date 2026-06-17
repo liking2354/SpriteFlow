@@ -47,9 +47,10 @@ class ModelRoute(Base):
 
 
 class ModelDefault(Base):
-    """每个分类的默认模型"""
+    """每个分类（及子分类）的默认模型 — category + subcategory 联合主键"""
     __tablename__ = "model_defaults"
 
-    category = Column(String(50), primary_key=True)  # text / image / video / audio / utility
+    category = Column(String(50), primary_key=True)
+    subcategory = Column(String(50), primary_key=True, default="")
     model_id = Column(String(200), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -20,8 +20,9 @@ type Props = {
   onUpdateRoute: (modelId: string, routeId: string, data: Record<string, unknown>) => Promise<void>;
   onDeleteRoute: (modelId: string, routeId: string) => Promise<void>;
   onDeleteModel: (modelId: string) => void;
+  onEditModel: (model: ModelEntry) => void;
   defaults: Record<string, string>;
-  onSetDefault: (category: string, modelId: string) => Promise<void>;
+  onSetDefault: (category: string, modelId: string, subcategory?: string) => Promise<void>;
 };
 
 type RouteInput = { channel_id: string; priority: number; model_override: string; param_overrides: Record<string, unknown>; status: string };
@@ -132,7 +133,7 @@ export function ModelRoutePanel({
   models, loading, search, onSearchChange,
   category, onCategoryChange, categories, channels,
   page, totalPages, total, onPageChange,
-  onAddRoute, onUpdateRoute, onDeleteRoute, onDeleteModel,
+  onAddRoute, onUpdateRoute, onDeleteRoute, onDeleteModel, onEditModel,
   defaults, onSetDefault,
 }: Props) {
   const confirm = useConfirm();
@@ -249,6 +250,9 @@ export function ModelRoutePanel({
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-[11px] text-gray-500 bg-[#2a2d31] px-1.5 py-0.5 rounded">{m.category}</span>
+                          {m.subcategory && (
+                            <span className="text-[11px] text-purple-400 bg-purple-400/10 border border-purple-400/20 px-1.5 py-0.5 rounded">{m.subcategory === "generation" ? "生成" : m.subcategory === "editing" ? "编辑" : m.subcategory}</span>
+                          )}
                           <span className="text-[11px] text-gray-600">{m.service}</span>
                           {m.routes.length > 0 && (
                             <span className="text-[10px] text-blue-400">{m.routes.filter(r => r.status === "active").length}/{m.routes.length} 个路由</span>
@@ -259,9 +263,9 @@ export function ModelRoutePanel({
                     <div className="flex items-center gap-1.5 flex-shrink-0 ml-3">
                       {!m.is_default && (
                         <button
-                          onClick={() => onSetDefault(m.category, m.model_id)}
+                          onClick={() => onSetDefault(m.category, m.model_id, m.subcategory || "")}
                           className="px-2.5 py-1 text-xs text-gray-500 hover:text-amber-400 hover:bg-amber-400/10 rounded transition-colors"
-                          title={`设为 ${m.category} 默认模型`}
+                          title={`设为 ${m.category}${m.subcategory ? ` (${m.subcategory})` : ""} 默认模型`}
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline mr-0.5 -mt-0.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                           设为默认
@@ -272,6 +276,12 @@ export function ModelRoutePanel({
                         className="px-2.5 py-1 text-xs text-gray-400 hover:text-white hover:bg-[#242629] rounded transition-colors"
                       >
                         {isExpanded ? "收起" : `展开 (${m.routes.length})`}
+                      </button>
+                      <button
+                        onClick={() => onEditModel(m)}
+                        className="px-2.5 py-1 text-xs text-gray-500 hover:text-blue-400 hover:bg-blue-400/10 rounded transition-colors"
+                      >
+                        编辑
                       </button>
                       <button
                         onClick={() => {

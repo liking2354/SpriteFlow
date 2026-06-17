@@ -28,10 +28,11 @@ def _get_or_create(cls, name: str) -> AIServiceBase:
     return _services[name]
 
 
-def register_custom_model(model_id: str, service_name: str, category: str, node_def: dict):
+def register_custom_model(model_id: str, service_name: str, category: str, node_def: dict, subcategory: str = ""):
     """注册一个自定义模型到内存注册表"""
     _custom_registry[model_id.lower()] = service_name
     _custom_node_schemas.setdefault(category, {})[model_id] = node_def
+    _custom_node_schemas.setdefault(category, {})[model_id]["subcategory"] = subcategory
 
 
 def unregister_custom_model(model_id: str):
@@ -39,6 +40,14 @@ def unregister_custom_model(model_id: str):
     _custom_registry.pop(model_id.lower(), None)
     for cat_models in _custom_node_schemas.values():
         cat_models.pop(model_id, None)
+
+
+def _derive_subcategory(model_id: str) -> str:
+    """根据模型 ID 推导子分类（与前端 NodesNavbar 分类逻辑一致）"""
+    lower = model_id.lower()
+    if "edit" in lower or "reference" in lower or "image-to-image" in lower:
+        return "editing"
+    return "generation"
 
 
 async def seed_builtin_models_to_db(db):
@@ -69,6 +78,9 @@ async def seed_builtin_models_to_db(db):
                 skipped += 1
                 continue
 
+            # 推导子分类（仅 image/video 需要）
+            subcategory = _derive_subcategory(model_id) if cat_key in ("image", "video") else ""
+
             # 检查是否已存在 — 已存在的合并更新 input_schema（新增属性不覆盖已有）
             existing = (await db.execute(
                 sa_select(CustomNodeSchema).where(CustomNodeSchema.model_id == model_id)
@@ -91,12 +103,16 @@ async def seed_builtin_models_to_db(db):
                     existing_input["schemas"]["input_data"]["required"] = merged_required
                     existing.input_schema = existing_input
                     logger.info(f"[seed_builtin_models] 已更新模型 {model_id} 的 input_schema")
+                # 补全子分类
+                if not existing.subcategory and subcategory:
+                    existing.subcategory = subcategory
                 skipped += 1
                 continue
 
             db.add(CustomNodeSchema(
                 model_id=model_id,
                 category=cat_key,
+                subcategory=subcategory,
                 name=node_def.get("name", model_id),
                 service=service,
                 input_schema=node_def.get("input_schema", {}),
@@ -155,8 +171,9 @@ async def sync_custom_nodes_to_registry(db):
         node_def = {
             "name": row.name,
             "input_schema": row.input_schema or {},
+            "subcategory": getattr(row, "subcategory", "") or "",
         }
-        register_custom_model(row.model_id, row.service, row.category, node_def)
+        register_custom_model(row.model_id, row.service, row.category, node_def, node_def["subcategory"])
 
 
 # ===========================================================================
@@ -637,6 +654,10 @@ def get_node_schemas(workflow_id: str = "", visible_models: set = None) -> dict:
         if cat_key in schema["categories"]:
             for model_id, node_def in models.items():
                 schema["categories"][cat_key]["models"][model_id] = node_def
+
+    # 注入自定义组件（Component-based，如 Seedance）
+    from spriteflow.components.schema_bridge import inject_component_schemas
+    inject_component_schemas(schema)
 
     if visible_models is not None:
         for cat_key in list(schema["categories"].keys()):

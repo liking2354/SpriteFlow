@@ -32,11 +32,14 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # 为已有数据库添加新列（避免旧表缺失字段报错）
-        try:
-            await conn.run_sync(
-                lambda sync_conn: sync_conn.exec_driver_sql(
-                    "ALTER TABLE workflows ADD COLUMN is_published BOOLEAN DEFAULT 0 NOT NULL"
+        for col_sql in [
+            "ALTER TABLE workflows ADD COLUMN is_published BOOLEAN DEFAULT 0 NOT NULL",
+            "ALTER TABLE workflow_custom_node_schemas ADD COLUMN subcategory VARCHAR(50) DEFAULT '' NOT NULL",
+            "ALTER TABLE workflow_model_configs ADD COLUMN subcategory VARCHAR(50) DEFAULT '' NOT NULL",
+        ]:
+            try:
+                await conn.run_sync(
+                    lambda sync_conn, sql=col_sql: sync_conn.exec_driver_sql(sql)
                 )
-            )
-        except Exception:
-            pass  # 列已存在则忽略
+            except Exception:
+                pass  # 列已存在则忽略

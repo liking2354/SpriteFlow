@@ -40,6 +40,9 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
     if (id.includes('video')) return 'videoNode';
     if (id.includes('audio')) return 'audioNode';
     if (id === 'api-models') return 'apiNode';
+    if (id === 'custom-video') return 'videoNode';
+    if (id === 'custom-image') return 'imageNode';
+    if (id === 'custom-other') return 'videoNode';
     return null;
   };
 
@@ -65,7 +68,9 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
       modelsMap ? Object.entries(modelsMap).map(([id, model]) => ({
         ...model,
         id,
-        name: SPECIAL_MODEL_KEYS[id] ? t(SPECIAL_MODEL_KEYS[id]) : (model?.name || formatName(id))
+        name: SPECIAL_MODEL_KEYS[id] ? t(SPECIAL_MODEL_KEYS[id]) : (model?.name || formatName(id)),
+        // 从后端数据读取 subcategory（优先使用后端数据，回退到空字符串）
+        subcategory: model?.subcategory || "",
       })) : [];
 
     const imageModels = mapModels(categories.image?.models);
@@ -73,6 +78,7 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
     const textModels = mapModels(categories.text?.models);
     const audioModels = mapModels(categories.audio?.models);
     const apiModels = mapModels(categories.api?.models);
+    const customModels = mapModels(categories.custom?.models);
     const rawUtilityModels = mapModels(categories.utility?.models);
     const utilityModels = [...rawUtilityModels];
 
@@ -92,13 +98,25 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
       ...audioModels.filter(isPassthrough).map(m => ({ ...m, type: 'audioNode' })),
     ];
 
-    const generateImageModels = imageModels.filter(m => m?.id && !isPassthrough(m) && !m.id.includes("edit") && !m.id.includes("reference") && !m.id.includes("image-to-image"));
-    const editImageModels = imageModels.filter(m => m?.id && !isPassthrough(m) && (m.id.includes("edit") || m.id.includes("reference") || m.id.includes("image-to-image")));
-    const upscaleImageModels = imageModels.filter(m => m?.id && !isPassthrough(m) && m.id.includes("upscale"));
-    const generateVideoModels = videoModels.filter(m => m?.id && !isPassthrough(m) && !m.id.includes("edit"));
-    const editVideoModels = videoModels.filter(m => m?.id && !isPassthrough(m) && m.id.includes("edit"));
+    // 使用后端 subcategory 字段进行分类（优先于启发式关键词匹配）
+    const generateImageModels = imageModels.filter(m => m?.id && !isPassthrough(m) && m.subcategory !== "editing");
+    const editImageModels = imageModels.filter(m => m?.id && !isPassthrough(m) && m.subcategory === "editing");
+    const upscaleImageModels = imageModels.filter(m => m?.id && !isPassthrough(m) && m.subcategory === "upscale");
+    const generateVideoModels = videoModels.filter(m => m?.id && !isPassthrough(m) && m.subcategory !== "editing");
+    const editVideoModels = videoModels.filter(m => m?.id && !isPassthrough(m) && m.subcategory === "editing");
     const textModelsFiltered = textModels.filter(m => !isPassthrough(m));
     const audioModelsFiltered = audioModels.filter(m => !isPassthrough(m));
+
+    // 自定义组件按子分类归类
+    const customVideoModels = customModels.filter(m => m?.subcategory === "video");
+    const customImageModels = customModels.filter(m => m?.subcategory === "image");
+    const customOtherModels = customModels.filter(m => m?.subcategory && !["video", "image"].includes(m.subcategory));
+
+    // 仅当有自定义组件时才显示该分类
+    const customMenuItems = [];
+    if (customVideoModels.length > 0) customMenuItems.push({ label: t('navbar.customVideo'), icon: <IoVideocamOutline />, hasSubmenu: true, id: "custom-video" });
+    if (customImageModels.length > 0) customMenuItems.push({ label: t('navbar.customImage'), icon: <IoImageOutline />, hasSubmenu: true, id: "custom-image" });
+    if (customOtherModels.length > 0) customMenuItems.push({ label: t('navbar.customOther'), icon: <TfiText />, hasSubmenu: true, id: "custom-other" });
 
     return {
       inputs: inputsModels,
@@ -112,6 +130,10 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
       textUtils: utilityModels,
       utilities: utilityModels,
       api: apiNodeModels,
+      customVideo: customVideoModels,
+      customImage: customImageModels,
+      customOther: customOtherModels,
+      customMenuItems,
     };
   };
 
@@ -157,6 +179,10 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
         { label: t('navbar.generateAudio'), icon: <AiOutlineAudio />, hasSubmenu: true, id: "generate-audio" },
       ]
     },
+    ...(categorizedModels.customMenuItems?.length > 0 ? [{
+      label: t('navbar.customComponents'),
+      items: categorizedModels.customMenuItems,
+    }] : []),
     {
       label: t('navbar.apiModels'),
       items: [
@@ -183,6 +209,9 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
       case "edit-video": return categorizedModels.editVideo.map(m => ({ label: m.name, model: m, type: "videoNode" }));
       case "generate-audio": return categorizedModels.audio.map(m => ({ label: m.name, model: m, type: "audioNode" }));
       case "api-models": return categorizedModels.api.map(m => ({ label: m.name, model: m, type: "apiNode" }));
+      case "custom-video": return categorizedModels.customVideo.map(m => ({ label: m.name, model: m, type: "videoNode" }));
+      case "custom-image": return categorizedModels.customImage.map(m => ({ label: m.name, model: m, type: "imageNode" }));
+      case "custom-other": return categorizedModels.customOther.map(m => ({ label: m.name, model: m, type: "videoNode" }));
       default: return [];
     }
   };
@@ -192,7 +221,8 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
       inputs,
       generateImage, editImage, upscaleImage, 
       generateVideo, editVideo, 
-      text, audio, textUtils, api 
+      text, audio, textUtils, api,
+      customVideo, customImage, customOther,
     } = categorizedModels;
 
     const allModels = [
@@ -205,6 +235,9 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
       ...text.map(m => ({ ...m, type: "textNode" })),
       ...audio.map(m => ({ ...m, type: "audioNode" })),
       ...textUtils.map(m => ({ ...m, type: m.id === "video-combiner" ? "vidConcatNode" : "concatNode" })),
+      ...customVideo.map(m => ({ ...m, type: "videoNode" })),
+      ...customImage.map(m => ({ ...m, type: "imageNode" })),
+      ...customOther.map(m => ({ ...m, type: "videoNode" })),
       ...apiNodeModels.map(m => ({ ...m, type: "apiNode" })),
     ];
 
@@ -250,22 +283,28 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
       let top = anchorRect.top;
       let maxHeight = "";
 
+      // 水平约束
       if (left + menuRect.width > windowWidth - padding) {
          left = windowWidth - menuRect.width - padding;
       }
-
       if (left < padding) {
         left = padding;
       }
 
-      if (top + menuRect.height > windowHeight - padding) {
-         const overflowY = (top + menuRect.height) - (windowHeight - padding);
-         top = top - overflowY;
+      // 垂直约束：始终确保菜单不超出视口
+      const maxAvailableHeight = windowHeight - padding * 2;
+      const menuNeedsScroll = menuRect.height > maxAvailableHeight;
+      if (menuNeedsScroll) {
+        maxHeight = `${maxAvailableHeight}px`;
       }
-      
+
+      // 如果菜单底部超出视口，向上推移
+      const effectiveHeight = menuNeedsScroll ? maxAvailableHeight : menuRect.height;
+      if (top + effectiveHeight > windowHeight - padding) {
+        top = windowHeight - padding - effectiveHeight;
+      }
       if (top < padding) {
         top = padding;
-        maxHeight = `${windowHeight - (padding * 2)}px`;
       }
 
       setMenuStyle({ 
@@ -436,6 +475,12 @@ const Submenu = ({ activeSubMenu, menuStructure, getSubmenuItems, handleAddNode,
         return <AiOutlineAudio />;
       case "api-models":
         return <RiInputMethodLine />;
+      case "custom-video":
+        return <IoVideocamOutline />;
+      case "custom-image":
+        return <IoImageOutline />;
+      case "custom-other":
+        return <TfiText />;
       default:
         return null;
     }

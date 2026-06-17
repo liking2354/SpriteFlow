@@ -55,6 +55,7 @@ from ..workflow.routers.cost_router import router as cost_router
 from ..workflow.database import init_db as init_wf_db
 from ..workflow.services.model_settings_service import init_default_settings
 from ..workflow.services.model_registry import sync_custom_nodes_to_registry
+from ..components.router import router as component_router
 
 
 @asynccontextmanager
@@ -307,6 +308,7 @@ def create_app() -> FastAPI:
     app.include_router(wf_model_router, prefix="/api/workflow/models", tags=["workflow-models"])
     app.include_router(wf_app_router, prefix="/api/workflow/app", tags=["workflow-app"])
     app.include_router(cost_router, tags=["cost"])
+    app.include_router(component_router)
 
     @app.get("/api/health")
     async def health():

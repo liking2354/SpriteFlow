@@ -25,6 +25,7 @@ async def list_all_models_with_routes(
     model_registry: list[dict],
     search: str = "",
     category: str = "",
+    subcategory: str = "",
     offset: int = 0,
     limit: int = 20,
 ) -> tuple[list[dict], int]:
@@ -42,7 +43,7 @@ async def list_all_models_with_routes(
     # 获取默认模型配置
     from ..models import ModelDefault
     default_result = await db.execute(select(ModelDefault))
-    defaults: dict[str, str] = {d.category: d.model_id for d in default_result.scalars().all()}
+    defaults: dict[str, str] = {(d.category, d.subcategory): d.model_id for d in default_result.scalars().all()}
 
     # 构建 model_id → routes 映射
     route_map: dict[str, list[dict]] = {}
@@ -57,13 +58,18 @@ async def list_all_models_with_routes(
             continue
         if category and m.get("category", "") != category:
             continue
+        if subcategory and m.get("subcategory", "") != subcategory:
+            continue
+        m_cat = m.get("category", "")
+        m_sub = m.get("subcategory", "")
         items.append({
             "model_id": mid,
             "name": m.get("name", mid),
-            "category": m.get("category", ""),
+            "category": m_cat,
+            "subcategory": m_sub,
             "service": m.get("service", ""),
             "routes": route_map.get(mid, []),
-            "is_default": defaults.get(m.get("category", "")) == mid,
+            "is_default": defaults.get((m_cat, m_sub)) == mid,
         })
 
     total = len(items)
@@ -185,7 +191,7 @@ async def delete_route(db: AsyncSession, route_id: str) -> bool:
 async def get_model_registry() -> list[dict]:
     """获取所有已知模型注册表（AI 模型，不含 passthrough / utility / 软删除节点）"""
     from ...workflow.services.model_registry import _base_schemas, _custom_node_schemas
-    from ...workflow.services.model_registry import MODEL_REGISTRY
+    from ...workflow.services.model_registry import MODEL_REGISTRY, _derive_subcategory
     from ...workflow.database import async_session as wf_session
     from ...workflow.models import ModelConfig as WFModelConfig
     from sqlalchemy import select as sa_select
@@ -211,10 +217,13 @@ async def get_model_registry() -> list[dict]:
                 continue
             if model_id in deleted_ids:
                 continue
+            # 为 image/video 内置模型推导子分类
+            subcategory = _derive_subcategory(model_id) if cat_key in ("image", "video") else ""
             models.append({
                 "model_id": model_id,
                 "name": node_def.get("name", model_id),
                 "category": cat_key,
+                "subcategory": subcategory,
                 "service": service,
             })
 
@@ -232,38 +241,51 @@ async def get_model_registry() -> list[dict]:
                 "model_id": model_id,
                 "name": node_def.get("name", model_id),
                 "category": cat_key,
+                "subcategory": node_def.get("subcategory", ""),
                 "service": service,
             })
 
     return models
 
 
+def _defaults_key(category: str, subcategory: str = "") -> str:
+    """构建默认模型映射的复合键：category:subcategory 或仅 category"""
+    return f"{category}:{subcategory}" if subcategory else category
+
+
 async def get_defaults(db: AsyncSession) -> dict[str, str]:
     """获取所有分类的默认模型映射"""
     from ..models import ModelDefault
     result = await db.execute(select(ModelDefault))
-    return {d.category: d.model_id for d in result.scalars().all()}
+    return {_defaults_key(d.category, d.subcategory): d.model_id for d in result.scalars().all()}
 
 
-async def set_default(db: AsyncSession, category: str, model_id: str) -> dict[str, str]:
-    """设置某分类的默认模型（upsert）"""
+async def set_default(db: AsyncSession, category: str, model_id: str, subcategory: str = "") -> dict[str, str]:
+    """设置某分类（及可选子分类）的默认模型（upsert）"""
     from ..models import ModelDefault
     from sqlalchemy import update as sa_update, insert as sa_insert
 
     # 检查模型是否存在
     registry = await get_model_registry()
-    found = any(m["model_id"] == model_id and m["category"] == category for m in registry)
+    found = any(
+        m["model_id"] == model_id and m["category"] == category and m.get("subcategory", "") == subcategory
+        for m in registry
+    )
     if not found:
-        raise ValueError(f"模型 {model_id} 不存在或不属于 {category} 分类")
+        detail = f"模型 {model_id} 不存在或不属于 {category}"
+        if subcategory:
+            detail += f":{subcategory}"
+        detail += " 分类"
+        raise ValueError(detail)
 
     # upsert: 先 update，若影响 0 行则 insert
     affected = await db.execute(
         sa_update(ModelDefault)
-        .where(ModelDefault.category == category)
+        .where(ModelDefault.category == category, ModelDefault.subcategory == subcategory)
         .values(model_id=model_id)
     )
     if affected.rowcount == 0:
-        default = ModelDefault(category=category, model_id=model_id)
+        default = ModelDefault(category=category, subcategory=subcategory, model_id=model_id)
         db.add(default)
 
     await db.flush()

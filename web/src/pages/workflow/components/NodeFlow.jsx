@@ -373,8 +373,19 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
   useEffect(() => {
     if (!initialNodeSchemas) {
       const endpoint = id ? `/api/workflow/${id}/node-schemas` : "/api/workflow/default/node-schemas";
-      axios.get(endpoint)
-        .then(res => setNodeSchemas(res.data || {}))
+      const apiEndpoint = id ? `/api/workflow/${id}/api-node-schemas` : "/api/workflow/default/api-node-schemas";
+      Promise.all([
+        axios.get(endpoint),
+        axios.get(apiEndpoint).catch(() => ({ data: {} })),
+      ])
+        .then(([schemasRes, apiRes]) => {
+          const schemas = schemasRes.data || {};
+          const apiData = apiRes.data || {};
+          if (apiData.categories) {
+            schemas.categories = { ...schemas.categories, ...apiData.categories };
+          }
+          setNodeSchemas(schemas);
+        })
         .catch(err => console.error("Failed to load node schemas", err));
     }
 

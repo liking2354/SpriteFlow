@@ -26,16 +26,23 @@ export function WorkflowEditorPage() {
       setLoading(true);
       setError(null);
       console.log("[WorkflowEditor] fetching APIs...");
-      const [schemasRes, defRes] = await Promise.all([
+      const [schemasRes, apiSchemasRes, defRes] = await Promise.all([
         axios.get(`/api/workflow/${id}/node-schemas`),
+        axios.get(`/api/workflow/${id}/api-node-schemas`).catch(() => ({ data: {} })),
         axios.get(`/api/workflow/get-workflow-def/${id}`),
       ]);
+      const merged = schemasRes.data || {};
+      const apiData = apiSchemasRes.data || {};
+      // 将 API 模型分类合并到主 schemas 中
+      if (apiData.categories) {
+        merged.categories = { ...merged.categories, ...apiData.categories };
+      }
       console.log("[WorkflowEditor] APIs returned:", {
-        schemasKeys: Object.keys(schemasRes.data || {}),
+        schemasKeys: Object.keys(merged),
+        apiCatKeys: Object.keys(apiData.categories || {}),
         defName: defRes.data?.name,
-        defDataKeys: defRes.data?.data ? Object.keys(defRes.data.data) : [],
       });
-      setNodeSchemas(schemasRes.data || {});
+      setNodeSchemas(merged);
       setWorkflowData(defRes.data || null);
     } catch (err: any) {
       console.error("Failed to load workflow data", err);

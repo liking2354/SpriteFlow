@@ -48,7 +48,26 @@
     "templates": "模板管理",
     "graph": "管线图",
     "workflow": "AI工作流",
-    "modelManager": "模型管理"
+    "modelManager": "模型管理",
+    "components": "组件管理"
+  },
+  "components": {
+    "title": "组件管理",
+    "desc": "管理自定义工作流组件，支持独立测试与运行",
+    "noComponents": "暂无注册组件",
+    "credential": "凭据配置",
+    "testForm": "测试参数",
+    "run": "运行测试",
+    "running": "运行中...",
+    "result": "测试结果",
+    "success": "执行成功",
+    "failed": "执行失败",
+    "noResult": "尚未运行",
+    "validate": "校验参数",
+    "valid": "参数有效",
+    "invalid": "参数无效",
+    "outputType": "输出类型",
+    "version": "版本"
   },
   "topbar": {
     "engineOnline": "引擎在线",
@@ -1077,6 +1096,10 @@
     "generateAudio": "生成音频",
     "apiModels": "API 模型",
     "apiNode": "API 节点",
+    "customComponents": "自定义组件",
+    "customVideo": "视频",
+    "customImage": "图片",
+    "customOther": "其他",
     "searchNodes": "搜索节点或模型",
     "inputText": "输入文本",
     "inputImage": "输入图像",

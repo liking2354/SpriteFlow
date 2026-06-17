@@ -80,6 +80,7 @@ const DEFAULT_ITEMS: MenuItem[] = [
   { id: "routing",      to: "/routing",      i18nKey: "nav.routing",      section: "manage",   visible: true, order: 9 },
   { id: "workflow",     to: "/workflow",     i18nKey: "nav.workflow",     section: "manage",   visible: true, order: 10 },
   { id: "modelManager", to: "/model-manager", i18nKey: "nav.modelManager", section: "manage", visible: true, order: 11 },
+  { id: "components",   to: "/components",    i18nKey: "nav.components",   section: "manage",   visible: true, order: 12 },
 ];
 
 // ---- 切换开关（未来通过环境变量或配置控制） ----

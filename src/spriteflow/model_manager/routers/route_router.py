@@ -24,13 +24,14 @@ router = APIRouter()
 async def api_list_models(
     search: str = Query(""),
     category: str = Query(""),
+    subcategory: str = Query(""),
     offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     registry = await get_model_registry()
     items, total, offset, limit = await list_all_models_with_routes(
-        db, registry, search, category, offset, limit,
+        db, registry, search, category, subcategory, offset, limit,
     )
     return ModelListResponse(items=items, total=total, offset=offset, limit=limit)
 
@@ -116,11 +117,12 @@ async def api_get_defaults(db: AsyncSession = Depends(get_db)):
 async def api_set_default(
     category: str,
     data: ModelDefaultUpdate,
+    subcategory: str = Query(""),
     db: AsyncSession = Depends(get_db),
 ):
-    """设置某分类的默认模型"""
+    """设置某分类（及可选子分类）的默认模型"""
     try:
-        defaults = await set_default(db, category, data.model_id)
+        defaults = await set_default(db, category, data.model_id, subcategory)
         return ModelDefaultsResponse(defaults=defaults)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

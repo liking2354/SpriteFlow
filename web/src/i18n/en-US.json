@@ -41,7 +41,26 @@
     "assets": "Assets",
     "routing": "Routing",
     "workflow": "AI Workflow",
-    "modelManager": "Model Manager"
+    "modelManager": "Model Manager",
+    "components": "Components"
+  },
+  "components": {
+    "title": "Component Manager",
+    "desc": "Manage custom workflow components. Test & run independently.",
+    "noComponents": "No components registered",
+    "credential": "Credentials",
+    "testForm": "Test Parameters",
+    "run": "Run Test",
+    "running": "Running...",
+    "result": "Test Result",
+    "success": "Execution Succeeded",
+    "failed": "Execution Failed",
+    "noResult": "Not run yet",
+    "validate": "Validate",
+    "valid": "Parameters valid",
+    "invalid": "Parameters invalid",
+    "outputType": "Output Type",
+    "version": "Version"
   },
   "topbar": {
     "engineOnline": "Engine Online",
@@ -879,6 +898,10 @@
     "generateAudio": "Generate Audio",
     "apiModels": "API Models",
     "apiNode": "Api Node",
+    "customComponents": "Custom Components",
+    "customVideo": "Video",
+    "customImage": "Image",
+    "customOther": "Other",
     "searchNodes": "Search nodes or models",
     "inputText": "Input Text",
     "inputImage": "Input Image",

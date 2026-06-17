@@ -1,0 +1,173 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - link "SpriteFlow v0.1" [ref=e5] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e7]:
+        - generic [ref=e8]: SpriteFlow
+        - generic [ref=e9]: v0.1
+    - generic [ref=e122]:
+      - generic [ref=e123]: 模型
+      - generic [ref=e124]: doubao-seedream-5-0-260128
+    - generic [ref=e10]:
+      - generic [ref=e15]: 引擎在线
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - button "blue" [ref=e18] [cursor=pointer]
+          - button "violet" [ref=e19] [cursor=pointer]
+          - button "cyan" [ref=e20] [cursor=pointer]
+          - button "pink" [ref=e21] [cursor=pointer]
+          - button "amber" [ref=e22] [cursor=pointer]
+        - button "暗色" [ref=e23] [cursor=pointer]:
+          - img [ref=e24]
+          - text: 暗色
+        - combobox [ref=e26] [cursor=pointer]:
+          - option "中文" [selected]
+          - option "English"
+  - generic [ref=e27]:
+    - complementary [ref=e28]:
+      - generic [ref=e30]: SpriteFlow
+      - navigation [ref=e32]:
+        - generic [ref=e33]:
+          - generic [ref=e34]: 生成工具
+          - generic [ref=e35]:
+            - link "快捷生图" [ref=e36] [cursor=pointer]:
+              - /url: /
+              - img [ref=e38]
+              - generic [ref=e40]: 快捷生图
+            - link "视频生成" [ref=e41] [cursor=pointer]:
+              - /url: /video
+              - img [ref=e43]
+              - generic [ref=e45]: 视频生成
+            - link "素材编辑" [ref=e46] [cursor=pointer]:
+              - /url: /editor
+              - img [ref=e48]
+              - generic [ref=e50]: 素材编辑
+            - link "精灵表工具" [ref=e51] [cursor=pointer]:
+              - /url: /spritesheet
+              - img [ref=e53]
+              - generic [ref=e55]: 精灵表工具
+            - link "视频序列帧" [ref=e56] [cursor=pointer]:
+              - /url: /video-frames
+              - img [ref=e58]
+              - generic [ref=e60]: 视频序列帧
+        - generic [ref=e61]:
+          - generic [ref=e62]: 资源管理
+          - generic [ref=e63]:
+            - link "素材库" [ref=e64] [cursor=pointer]:
+              - /url: /assets
+              - img [ref=e66]
+              - generic [ref=e68]: 素材库
+            - link "模板管理" [ref=e69] [cursor=pointer]:
+              - /url: /templates
+              - img [ref=e71]
+              - generic [ref=e73]: 模板管理
+            - link "管线图" [ref=e74] [cursor=pointer]:
+              - /url: /graphs
+              - img [ref=e76]
+              - generic [ref=e78]: 管线图
+            - link "能力路由" [ref=e79] [cursor=pointer]:
+              - /url: /routing
+              - img [ref=e81]
+              - generic [ref=e83]: 能力路由
+            - link "AI工作流" [ref=e84] [cursor=pointer]:
+              - /url: /workflow
+              - img [ref=e86]
+              - generic [ref=e88]: AI工作流
+      - generic [ref=e89]:
+        - button "折叠" [ref=e90] [cursor=pointer]:
+          - img [ref=e91]
+          - generic [ref=e93]: 折叠
+        - button "菜单管理" [ref=e94] [cursor=pointer]:
+          - img [ref=e95]
+      - generic [ref=e98]:
+        - generic [ref=e101]: POWERED BY
+        - generic [ref=e102]: Seedream 5.0 Lite
+    - main [ref=e103]:
+      - generic [ref=e125]:
+        - generic [ref=e127]:
+          - generic [ref=e128]:
+            - link [ref=e129] [cursor=pointer]:
+              - /url: /workflow
+              - img [ref=e130]
+            - button "Untitled" [ref=e132] [cursor=pointer]:
+              - generic [ref=e133]: Untitled
+              - img [ref=e134]
+          - generic [ref=e136]:
+            - button "editor.settings" [ref=e138] [cursor=pointer]:
+              - img [ref=e139]
+              - text: editor.settings
+              - img [ref=e141]
+            - button "发布" [ref=e143] [cursor=pointer]:
+              - img [ref=e144]
+              - text: 发布
+            - button "全部运行" [ref=e146] [cursor=pointer]:
+              - img [ref=e147]
+              - text: 全部运行
+        - generic [ref=e149]:
+          - button [ref=e151] [cursor=pointer]:
+            - img [ref=e152]
+          - button [ref=e155] [cursor=pointer]:
+            - img [ref=e156]
+          - button [ref=e158] [cursor=pointer]:
+            - img [ref=e159]
+          - button [ref=e162] [cursor=pointer]:
+            - img [ref=e163]
+          - button [ref=e166] [cursor=pointer]:
+            - img [ref=e167]
+          - button [ref=e170] [cursor=pointer]:
+            - img [ref=e171]
+        - application [ref=e174]:
+          - img
+        - generic [ref=e178]:
+          - generic [ref=e179]:
+            - heading "选择一个工作流" [level=2] [ref=e180]
+            - paragraph [ref=e181]: 或从空白开始
+          - generic [ref=e182]:
+            - button "新建 Empty Workflow" [ref=e183] [cursor=pointer]:
+              - generic [ref=e187]: 新建
+              - generic [ref=e192]:
+                - img [ref=e194]
+                - heading "Empty Workflow" [level=3] [ref=e196]
+            - button "预设 Image Generator & Editor Simple text to image Generation and Editing with Wan 2.5" [ref=e197] [cursor=pointer]:
+              - generic [ref=e201]: 预设
+              - generic [ref=e205]:
+                - generic [ref=e206]:
+                  - img [ref=e208]
+                  - heading "Image Generator & Editor" [level=3] [ref=e212]
+                - paragraph [ref=e215]: Simple text to image Generation and Editing with Wan 2.5
+            - button "预设 Video Generator Simple Video Generation with Seedance Lite" [ref=e216] [cursor=pointer]:
+              - generic [ref=e220]: 预设
+              - generic [ref=e224]:
+                - generic [ref=e225]:
+                  - img [ref=e227]
+                  - heading "Video Generator" [level=3] [ref=e230]
+                - paragraph [ref=e233]: Simple Video Generation with Seedance Lite
+            - button "预设 Audio Generator Generate audio from text with Suno" [ref=e234] [cursor=pointer]:
+              - generic [ref=e238]: 预设
+              - generic [ref=e242]:
+                - generic [ref=e243]:
+                  - img [ref=e245]
+                  - heading "Audio Generator" [level=3] [ref=e247]
+                - paragraph [ref=e250]: Generate audio from text with Suno
+            - button "预设 LLM Image Captioning Generate a prompt from an image with GPT-5" [ref=e251] [cursor=pointer]:
+              - generic [ref=e255]: 预设
+              - generic [ref=e259]:
+                - generic [ref=e260]:
+                  - img [ref=e262]
+                  - heading "LLM Image Captioning" [level=3] [ref=e264]
+                - paragraph [ref=e267]: Generate a prompt from an image with GPT-5
+          - button "关掉并进入空白画布" [ref=e268] [cursor=pointer]
+        - button [ref=e270] [cursor=pointer]:
+          - img [ref=e272]
+  - contentinfo [ref=e107]:
+    - generic [ref=e110]: 正常
+    - generic [ref=e111]:
+      - generic [ref=e112]: nodes
+      - generic [ref=e113]: "13"
+    - generic [ref=e114]:
+      - generic [ref=e115]: assets
+      - generic [ref=e116]: "176"
+    - generic [ref=e117]:
+      - generic [ref=e118]: routes
+      - generic [ref=e119]: "15"
+    - generic [ref=e120]: SpriteFlow Engine

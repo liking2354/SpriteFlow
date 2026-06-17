@@ -367,6 +367,7 @@ async def create_custom_node(db: AsyncSession, data: dict) -> dict:
         raise ValueError(f"Custom model '{model_id}' already exists in database")
 
     category = data.get("category", "utility")
+    subcategory = data.get("subcategory", "")
     name = data.get("name", model_id)
     service = data.get("service", "openai")
 
@@ -377,6 +378,7 @@ async def create_custom_node(db: AsyncSession, data: dict) -> dict:
     node_schema = CustomNodeSchema(
         model_id=model_id,
         category=category,
+        subcategory=subcategory,
         name=name,
         service=service,
         input_schema=input_schema,
@@ -386,12 +388,13 @@ async def create_custom_node(db: AsyncSession, data: dict) -> dict:
     await db.refresh(node_schema)
 
     # 同步到内存注册表
-    node_def = {"name": name, "input_schema": input_schema}
-    register_custom_model(model_id, service, category, node_def)
+    node_def = {"name": name, "input_schema": input_schema, "subcategory": subcategory}
+    register_custom_model(model_id, service, category, node_def, subcategory)
 
     return {
         "model_id": node_schema.model_id,
         "category": node_schema.category,
+        "subcategory": node_schema.subcategory,
         "name": node_schema.name,
         "service": node_schema.service,
         "input_schema": node_schema.input_schema,
@@ -413,6 +416,8 @@ async def update_custom_node(db: AsyncSession, model_id: str, data: dict) -> dic
         node.name = data["name"]
     if "service" in data:
         node.service = data["service"]
+    if "subcategory" in data:
+        node.subcategory = data["subcategory"]
     if "category" in data and data["category"] != old_category:
         new_cat = data["category"]
         props = _CATEGORY_INPUT_TEMPLATES.get(new_cat, _CATEGORY_INPUT_TEMPLATES["utility"])
@@ -426,12 +431,13 @@ async def update_custom_node(db: AsyncSession, model_id: str, data: dict) -> dic
 
     # 更新内存注册表
     unregister_custom_model(model_id)
-    node_def = {"name": node.name, "input_schema": node.input_schema}
-    register_custom_model(node.model_id, node.service, node.category, node_def)
+    node_def = {"name": node.name, "input_schema": node.input_schema, "subcategory": getattr(node, "subcategory", "") or ""}
+    register_custom_model(node.model_id, node.service, node.category, node_def, node_def["subcategory"])
 
     return {
         "model_id": node.model_id,
         "category": node.category,
+        "subcategory": getattr(node, "subcategory", "") or "",
         "name": node.name,
         "service": node.service,
         "input_schema": node.input_schema,

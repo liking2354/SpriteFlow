@@ -92,6 +92,7 @@ class ModelWithRoutes(BaseModel):
     model_id: str
     name: str = ""
     category: str = ""
+    subcategory: str = ""
     service: str = ""
     routes: list[RouteResponse] = []
     is_default: bool = False
@@ -110,6 +111,7 @@ class RegistryModel(BaseModel):
     model_id: str
     name: str
     category: str
+    subcategory: str = ""
     service: str
 
 
@@ -126,8 +128,9 @@ class ModelDefaultUpdate(BaseModel):
 
 class ModelDefaultEntry(BaseModel):
     category: str
+    subcategory: str = ""
     model_id: str
 
 
 class ModelDefaultsResponse(BaseModel):
-    defaults: dict[str, str]  # category → model_id 映射
+    defaults: dict[str, str]  # key 格式: "category" 或 "category:subcategory" → model_id 映射

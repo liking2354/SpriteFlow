@@ -16,6 +16,7 @@ import { VideoFramesPage } from "@/pages/VideoFrames";
 import { WorkflowListPage } from "@/pages/workflow/WorkflowList";
 import { WorkflowEditorPage } from "@/pages/workflow/WorkflowEditor";
 import { ModelManager } from "@/pages/model-manager/ModelManager";
+import { ComponentsPage } from "@/pages/components/ComponentsPage";
 
 export function App() {
   const hydrate = useThemeStore((s) => s.hydrate);
@@ -42,6 +43,7 @@ export function App() {
         <Route path="/workflow" element={<WorkflowListPage />} />
         <Route path="/workflow/:id" element={<WorkflowEditorPage />} />
         <Route path="/model-manager" element={<ModelManager />} />
+        <Route path="/components" element={<ComponentsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>
