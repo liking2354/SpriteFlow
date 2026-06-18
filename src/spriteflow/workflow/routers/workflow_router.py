@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
 from ..workflow_helper import (
@@ -7,6 +7,7 @@ from ..workflow_helper import (
     get_api_node_schemas_helper,
     get_workflow_def_helper,
     run_workflow_helper,
+    execute_workflow_run,
     get_run_status_helper,
     run_node_helper,
     publish_workflow_helper,
@@ -136,11 +137,19 @@ async def update_workflow_category(
 
 @router.post("/{workflow_id}/run")
 async def run_workflow(
-    workflow_id: str, request: Request, db: AsyncSession = Depends(get_db)
+    workflow_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
 ):
     try:
         payload = await request.json()
-        return await run_workflow_helper(db, workflow_id, payload)
+        prep_result = await run_workflow_helper(db, workflow_id, payload)
+        run_id = prep_result["run_id"]
+        nodes_data = prep_result.get("nodes_data", [])
+        # 后台异步执行节点，立即返回 run_id 供前端轮询
+        background_tasks.add_task(execute_workflow_run, run_id, workflow_id, nodes_data)
+        return {"run_id": run_id}
     except Exception as e:
         if isinstance(e, HTTPException):
             raise e

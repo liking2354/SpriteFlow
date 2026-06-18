@@ -1248,31 +1248,21 @@ export const presets = [
   }
 ];
 
-// 转换 COS URL 为代理 URL，解决 CORS 问题
+// 转换 COS URL：桶已配置为公有读，直接返回去掉签名参数的 COS 直链
 export const convertCosUrlToProxy = (url) => {
   if (!url) return url;
   
-  // 检查是否是 COS URL
-  const cosPattern = /https:\/\/[^/]+\.cos\.[^/]+\.myqcloud\.com\//;
+  // 检查是否是 COS URL（myqcloud.com 或 tencentyun.com）
+  const cosPattern = /https:\/\/[^/]+\.(cos[^/]*\.myqcloud\.com|tencentyun\.com)\//;
   if (cosPattern.test(url)) {
-    // 提取路径部分
-    const match = url.match(/https:\/\/[^/]+\.cos\.[^/]+\.myqcloud\.com\/(.+)/);
-    if (match && match[1]) {
-      // 移除查询参数（预签名 URL 的签名参数）
-      const path = match[1].split('?')[0];
-      return `/api/proxy/cos/${encodeURIComponent(path)}`;
-    }
+    // 去掉查询参数（预签名 URL 的签名参数），桶公有读后无需签名
+    return url.split('?')[0];
   }
   
   // 检查是否是本地存储 URI (local://)
   if (url.startsWith('local://')) {
     const path = url.replace('local://', '');
     return `/api/proxy/local/${encodeURIComponent(path)}`;
-  }
-  
-  // 检查是否是已处理过的代理路径
-  if (url.startsWith('/api/proxy/')) {
-    return url;
   }
   
   return url;

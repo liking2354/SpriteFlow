@@ -130,6 +130,13 @@ const ImageGeneration = ({ id, data, selected }) => {
 
     // Preserve UI-only flags that are not part of the model schema
     const UI_KEYS = ["make_output", "make_input"];
+    // Passthrough models should always preserve image_url regardless of schema properties
+    const PASSTHROUGH_KEYS = ["image_url", "video_url", "audio_url", "prompt"];
+    if (data.selectedModel?.id?.includes("passthrough")) {
+      PASSTHROUGH_KEYS.forEach((k) => {
+        if (data.formValues?.[k] !== undefined) merged[k] = data.formValues[k];
+      });
+    }
     UI_KEYS.forEach((k) => {
       if (data.formValues?.[k] !== undefined) merged[k] = data.formValues[k];
     });
@@ -192,7 +199,13 @@ const ImageGeneration = ({ id, data, selected }) => {
 
   useEffect(() => {
     if (data?.onDataChange) {
-      data.onDataChange(id, { selectedModel, formValues, loading });
+      // 将 formValues 中的值同步为 resultUrl/outputs，确保下游节点能实时收到更新
+      const imageUrl = formValues?.image_url || null;
+      data.onDataChange(id, {
+        selectedModel, formValues, loading,
+        resultUrl: imageUrl,
+        outputs: imageUrl ? [{ type: "image_url", value: imageUrl }] : [],
+      });
     }
   }, [selectedModel, formValues, loading]);
   
@@ -450,17 +463,22 @@ const ImageGeneration = ({ id, data, selected }) => {
   useEffect(() => {
     if (displayImage) {
       setImageMetadata(prev => ({ ...prev, size: null }));
-      fetch(convertCosUrlToProxy(displayImage), { method: 'HEAD' })
-        .then(res => {
-          const size = res.headers.get('content-length');
-          if (size) {
-            const sizeInMB = (parseInt(size) / (1024 * 1024)).toFixed(2);
-            setImageMetadata(prev => ({ ...prev, size: sizeInMB + ' MB' }));
-          }
-        })
-        .catch(() => {
-          setImageMetadata(prev => ({ ...prev, size: null }));
-        });
+      const proxyUrl = convertCosUrlToProxy(displayImage);
+      // 跨域 COS 直链不发起 HEAD 请求（桶未配 CORS 时会报错但图片预览正常）
+      const isCrossOrigin = proxyUrl.startsWith('https://') && !proxyUrl.startsWith(window.location.origin);
+      if (!isCrossOrigin) {
+        fetch(proxyUrl, { method: 'HEAD' })
+          .then(res => {
+            const size = res.headers.get('content-length');
+            if (size) {
+              const sizeInMB = (parseInt(size) / (1024 * 1024)).toFixed(2);
+              setImageMetadata(prev => ({ ...prev, size: sizeInMB + ' MB' }));
+            }
+          })
+          .catch(() => {
+            setImageMetadata(prev => ({ ...prev, size: null }));
+          });
+      }
     } else {
       setImageMetadata({ width: 0, height: 0, size: null });
     }

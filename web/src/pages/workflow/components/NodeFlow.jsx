@@ -291,6 +291,7 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
   const onConnectRef = useRef(null);
   const publishingRef = useRef(false);
   const settingsRef = useRef(null);
+  const pollIntervalRef = useRef(null);
   const [interactionMode, setInteractionMode] = useState(initialState?.metadata?.interactionMode || false);
   const [publishWorkflow, setPublishWorkflow] = useState(initialState?.metadata?.publishWorkflow || false);
   const [template, setTemplate] = useState(initialState?.metadata?.template || {
@@ -567,6 +568,22 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
     };
   }, [nodes, hasFit, fitView, isRestoring]);
 
+  // 当 runId 变化时自动启动/停止轮询
+  // 覆盖两个场景：
+  //   1. 用户点击 Run → handleRunWorkflow 设置新 runId
+  //   2. 页面加载时从后端恢复的 runId（即使关闭页面后重新打开也能看到运行态）
+  useEffect(() => {
+    if (!runId) {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      return;
+    }
+    pollRunIdStatus(runId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId]);
+
   const arrangeNodesInRow = useCallback(() => {
     const spacing = 350;
     const y = 100;
@@ -637,7 +654,9 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
 
       if (!connectedEdges.length) return updatedNodes;
 
-      const resultValue = newData.resultUrl || newData.outputs?.[0]?.value;
+      const rawValue = newData.resultUrl || newData.outputs?.[0]?.value;
+      // 剥离 COS 签名参数（桶公有读后不需要预签名），同时去掉旧代理路径
+      const resultValue = convertCosUrlToProxy(rawValue || undefined);
       // if (!resultValue) return updatedNodes;
 
       updatedNodes = updatedNodes.map((node) => {
@@ -828,9 +847,10 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
         if (!sourceNode || !targetNode || !sourceNode.data) return newEdges;
 
         const sourceData = sourceNode.data;
-        const resultValue = sourceData.viewingOutput !== undefined
+        const rawValue = sourceData.viewingOutput !== undefined
           ? sourceData.viewingOutput
           : (sourceData.resultUrl || sourceData.outputs?.[0]?.value || null);
+        const resultValue = convertCosUrlToProxy(rawValue);
         // if (!resultValue || resultValue.trim() === "") return newEdges;
 
         const sourceValue = sourceNode?.type === "concatNode"
@@ -1483,12 +1503,20 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
   }, [handleSaveWorkFlow]);
 
   const pollRunIdStatus = (runId) => {
+    // 清除已有轮询
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
     const interval = setInterval(() => {
       axios.get(`/api/workflow/run/${runId}/status`)
         .then((response) => {
           const runData = response.data;
           const nodesStatus = runData?.nodes || {};
           setWorkflowIds(workflowId, runId);
+
+          let hasRunning = false;
 
           Object.entries(nodesStatus).forEach(([id, runs]) => {
             if (!runs || runs.length === 0) return;
@@ -1500,6 +1528,7 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
             const first = outputs?.[0]?.value || "";
 
             if (status === "processing" || status === "running") {
+              hasRunning = true;
               setLoadingNodes((prev) => ({ ...prev, [id]: true }));
               return;
             } else {
@@ -1571,6 +1600,11 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
             }
           });
 
+          // 存在运行中的节点时，设置运行态
+          if (hasRunning) {
+            setIsRunning((prev) => (prev !== 1 ? 1 : prev));
+          }
+
           const allCompleted = Object.values(nodesStatus).every(
             (nodeRuns) => nodeRuns[0]?.status === "succeeded"
           );
@@ -1598,6 +1632,8 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
           toast.error(t('editor.failedToGetStatus'));
         });
     }, 3000);
+
+    pollIntervalRef.current = interval;
   };
 
   const handleRunWorkflow = async () => {
@@ -1614,7 +1650,7 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
       const newRunId = response.data.run_id;
       setRunId(newRunId);
       setWorkflowIds(workflowId, newRunId);
-      pollRunIdStatus(newRunId);
+      // 轮询由 useEffect([runId]) 自动触发
     } catch (error) {
       console.log(error);
       if (error.response) {

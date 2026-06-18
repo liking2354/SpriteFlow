@@ -20,6 +20,9 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
 - **Video Generation** — Text-to-Video and Image-to-Video via Seedance
 - **Asset Management** — Upload, organize, tag, group, favorite, lineage tracking
 - **Visual Graph Editor** — Drag-and-drop pipeline composition with React Flow
+- **Interactive AI Inpainting** — Mask drawing + AI-powered inpainting/erasing via Jimeng
+- **Pixel Editor** — Pixel-level brush, eraser, eyedropper, and selection tools for sprite refinement
+- **Custom Components** — Extensible plugin framework for custom AI nodes with credential management, testing, and validation
 - **Batch Production** — Spec × Character × Action matrix generation
 - **Capability Routing** — Multi-provider routing with fallback chains and hot reload
 
@@ -34,6 +37,8 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
 | **Web Framework** | FastAPI + Uvicorn | REST API + SSE streaming |
 | **Data Validation** | Pydantic + pydantic-settings | Request model validation & env config |
 | **Async Database** | aiosqlite | Assets/tasks/templates/config persistence |
+| **AI Clients** | openai + replicate + ollama | Multi-provider model client SDKs |
+| **ORM** | SQLAlchemy (asyncio) | Workflow/model manager persistence |
 | **Image Processing** | Pillow + NumPy | Format conversion, sprite alignment, spritesheet packing |
 | **Video Processing** | OpenCV | Frame extraction & cropping |
 | **AI Background Removal** | rembg | Local AI matting (offline) |
@@ -42,6 +47,7 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
 | **Cloud Storage** | cos-python-sdk-v5 | Tencent COS object storage |
 | **SSE** | sse-starlette | Graph execution progress streaming |
 | **File Upload** | python-multipart | FormData file upload |
+| **Async I/O** | aiofiles | Async file reads/writes |
 | **Package Management** | uv + hatchling | Dependency management & build |
 | **Testing** | pytest + pytest-asyncio + respx | Unit tests & HTTP mocking |
 
@@ -74,6 +80,8 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
 | **Jimeng Inpainting** (Volcano Vision) | jimeng_image2image_dream_inpaint | Interactive AI inpainting |
 | **Rembg** | isnet series | Local AI background removal |
 | **Volcengine Image** (Volcano Vision) | Image enhancement/repair | Watermark removal, quality enhancement, matting |
+| **Jimeng Inpainting** (Volcano Vision) | interactive inpaint, erase | `VOLC_ACCESS_KEY_ID` |
+| **Seedance Pro Fast** (Custom Component) | text2video, img2video (advanced params) | `ARK_API_KEY` |
 | **imgly Background Removal** (Frontend) | isnet quantized model | Browser-side WASM AI matting |
 
 ### Storage & Infrastructure
@@ -90,34 +98,36 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                  Web Frontend (React)                 │
-│   @xyflow/react · Konva · Tailwind · Zustand · RQ   │
-└──────────────────────┬───────────────────────────────┘
-                       │ HTTP / SSE
-┌──────────────────────▼───────────────────────────────┐
-│                  FastAPI Backend                       │
-│      /api/nodes · /api/graphs                       │
-│      /api/generate · /api/assets · /api/videos        │
-│      /api/routing · /api/menu · /api/config           │
-└──────────────────────┬───────────────────────────────┘
-                       │
-    ┌──────────────────┼──────────────────┐
-    ▼                  ▼                  ▼
-┌────────┐    ┌─────────────┐    ┌──────────────┐
-│Executor│    │ VideoWorker  │    │IngestPipeline│
-│  DAG   │    │(poll Seedance)│   │  (COS+SQLite) │
-└───┬────┘    └─────────────┘    └──────────────┘
-    │
-┌───▼──────────────────────────────────────────────────┐
-│                 CapabilityRouter                      │
-│     routing.yaml + SQLite config persistent           │
-└───┬──────────────────────────────────────────────────┘
-    │
-┌───▼──────────────────────────────────────────────────┐
-│                     Providers                         │
-│  Seedream · Seedance · OpenRouter · Rembg · Volcengine│
-└──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                   Web Frontend (React)                    │
+│    @xyflow/react · Konva · Tailwind · Zustand · RQ      │
+└────────────────────────┬─────────────────────────────────┘
+                         │ HTTP / SSE
+┌────────────────────────▼─────────────────────────────────┐
+│                    FastAPI Backend                        │
+│     /api/nodes · /api/graphs · /api/generate             │
+│     /api/assets · /api/videos · /api/routing             │
+│     /api/menu · /api/config · /api/components            │
+│     /api/image-editor · /api/workflow · /api/model-manager│
+└────────────────────────┬─────────────────────────────────┘
+                         │
+      ┌──────────────────┼─────────────────────┐
+      ▼                  ▼                     ▼
+┌──────────┐   ┌──────────────┐   ┌────────────────┐
+│ Executor │   │ VideoWorker  │   │ IngestPipeline │
+│   DAG    │   │(poll Seedance)│   │  (COS+SQLite)  │
+└────┬─────┘   └──────────────┘   └────────────────┘
+     │
+┌────▼─────────────────────────────────────────────────────┐
+│                    CapabilityRouter                       │
+│       routing.yaml + SQLite config persistent            │
+└────┬─────────────────────────────────────────────────────┘
+     │
+┌────▼─────────────────────────────────────────────────────┐
+│         Providers + ComponentRegistry                     │
+│   Seedream · Seedance · OpenRouter · Rembg · Volcengine  │
+│   Custom Components (Seedance Pro Fast, ...)              │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -205,6 +215,10 @@ SpriteFlow/
 │   │   ├── db.py             # SQLite CRUD (assets, jobs, configs)
 │   │   ├── ingest.py         # Upload + ingest pipeline
 │   │   └── models.py         # Data models + SQL schema
+│   ├── graph/               # Pipeline graph validation & DAG build
+│   │   ├── bridge.py         # Graph → DAG conversion & cycle detection
+│   │   ├── models.py         # Graph data models
+│   │   └── store.py          # Graph persistence (SQLite/JSON)
 │   ├── engine/               # Execution engine
 │   │   ├── cache.py          # Content-addressable cache
 │   │   ├── context.py        # Execution context
@@ -251,9 +265,18 @@ SpriteFlow/
 │   │   ├── openrouter.py     # OpenRouter multi-model
 │   │   ├── rembg_provider.py # Local background removal
 │   │   └── volcengine_image.py # Volcengine AI image processing
+│   ├── tools/               # Utility tools
+│   │   └── watermark_remover.py  # AI video watermark removal (Canny + TELEA)
 │   ├── storage/              # Storage backends
 │   │   ├── cos_storage.py    # Tencent COS cloud storage
 │   │   └── local_storage.py  # Local filesystem fallback
+│   ├── components/           # Custom component framework
+│   │   ├── base.py           # Component base class & metadata
+│   │   ├── registry.py       # Global component registry
+│   │   ├── router.py         # Component management & test API
+│   │   ├── schema_bridge.py  # Component ↔ node-schema converter
+│   │   └── ai/               # AI components
+│   │       └── seedance_pro_fast.py  # Seedance 1.0 Pro Fast
 │   ├── templates/            # Prompt template system
 │   │   ├── api.py            # Template CRUD API
 │   │   ├── db.py             # Template SQLite layer
@@ -296,6 +319,7 @@ SpriteFlow/
 │       │   ├── Video/        # Video generation
 │       │   ├── VideoFrames/  # Video frame extraction
 │       │   ├── model-manager/  # Model manager (channels + routes)
+│       │   ├── components/     # Custom component management
 │       │   └── workflow/     # AI workflow editor + list
 │       ├── stores/           # Zustand stores (theme, menu)
 │       ├── api/              # API client & types
@@ -332,6 +356,15 @@ SpriteFlow/
 | **DirectionVariant** | Generate direction variants (up/down/left/right) |
 | **AnimationSprite** | Generate animation frames from action template |
 
+
+### Custom Components (Extensible)
+
+| Component | Description |
+|-----------|-------------|
+| **SeedanceProFast** | Seedance 1.0 Pro Fast video generation with custom parameter presets, credential management, and test/validate API |
+
+Custom components are self-contained plugins with independent schemas, credentials, and execution logic. They integrate into the workflow engine via [ComponentRegistry](src/spriteflow/components/registry.py) and can be managed through the [ComponentsPage](web/src/pages/components/ComponentsPage.tsx) UI.
+
 ---
 
 ## Supported AI Providers
@@ -343,6 +376,8 @@ SpriteFlow/
 | **OpenRouter** | text2img, img2img, character_master, four_view | `OPENROUTER_API_KEY` |
 | **Rembg** | remove_bg (local, no key needed) | — |
 | **Volcengine Image** | enhance, inpaint, outpaint, cut, slim, resize, remove_bg | `VOLC_ACCESS_KEY_ID` |
+| **Jimeng Inpainting** (Volcano Vision) | interactive inpaint, erase | `VOLC_ACCESS_KEY_ID` |
+| **Seedance Pro Fast** (Custom Component) | text2video, img2video (advanced params) | `ARK_API_KEY` |
 
 ---
 

@@ -256,9 +256,22 @@ async def get_workflow_defs_helper(db: AsyncSession, limit: int = 20, offset: in
 async def get_workflow_def_helper(db: AsyncSession, workflow_id: str) -> dict:
     """
     GET /api/workflow/get-workflow-def/{id}
-    返回工作流详情
+    返回工作流详情（含最近运行 run_id，用于恢复运行态）
     """
     wf = await _get_workflow(db, workflow_id)
+
+    # 查询最近一次运行的 run_id（如果仍有节点在 running，前端需要恢复轮询）
+    run_id = None
+    result = await db.execute(
+        select(RunHistory.run_id)
+        .where(RunHistory.workflow_id == workflow_id)
+        .order_by(RunHistory.created_at.desc())
+        .limit(1)
+    )
+    row = result.first()
+    if row:
+        run_id = row[0]
+
     return {
         "id": wf.id,
         "name": wf.name,
@@ -272,6 +285,7 @@ async def get_workflow_def_helper(db: AsyncSession, workflow_id: str) -> dict:
         "show_temp_button": not str(wf.category or "").startswith("Template/"),
         "created_at": wf.created_at.isoformat() if wf.created_at else _now(),
         "updated_at": wf.updated_at.isoformat() if wf.updated_at else _now(),
+        "run_id": run_id,
     }
 
 
@@ -322,12 +336,12 @@ async def update_workflow_category_helper(db: AsyncSession, workflow_id: str, pa
 async def run_workflow_helper(db: AsyncSession, workflow_id: str, payload: dict) -> dict:
     """
     POST /api/workflow/{id}/run
-    运行整个工作流（所有节点）
+    准备工作流运行记录并立即返回 run_id，实际执行由 BackgroundTasks 异步完成
     """
     wf = await _get_workflow(db, workflow_id)
     run_id = gen_uuid()
 
-    # 创建工作流运行记录
+    # 创建工作流运行记录（初始状态 pending）
     nodes_data = wf.data.get("nodes", []) if isinstance(wf.data, dict) else []
 
     for node in nodes_data:
@@ -338,120 +352,138 @@ async def run_workflow_helper(db: AsyncSession, workflow_id: str, payload: dict)
             node_id=node_id,
             run_id=run_id,
             node_run_id=gen_uuid(),
-            status="pending",
+            status="running",  # 初始即 running，前端轮询能立即看到运行态
             node_data=node,
         )
         db.add(node_run)
 
     await db.flush()
+    await db.commit()  # 必须提交，否则后台任务会遇到 SQLite 数据库锁
+    return {"run_id": run_id, "nodes_data": nodes_data, "workflow_id": workflow_id}
 
-    # 同步执行每个节点（简化版：不使用后台任务）
-    # 实际场景建议用 BackgroundTasks
+
+async def execute_workflow_run(
+    run_id: str,
+    workflow_id: str,
+    nodes_data: list[dict[str, Any]],
+) -> None:
+    """
+    后台异步执行工作流所有节点。
+
+    使用独立的数据库会话，逐个执行节点并在每次执行前后更新 RunHistory 状态。
+    前端通过 GET /api/workflow/run/{run_id}/status 轮询状态变化。
+    """
+    from .database import async_session as _async_session
+
     # 维护已执行节点的输出，用于解析下游节点的边缘引用
     node_outputs: dict[str, list[dict[str, Any]]] = {}
 
     for node in nodes_data:
         node_id = node.get("id", "")
-        try:
-            model_id = node.get("model", "")
-            category = node.get("category", "")
-            form_values = node.get("formValues", {})
+        result: dict[str, Any] | None = None
+        status = "running"
 
-            # 从 input_params 读取基础参数（表单填写的值）
-            input_params_raw = node.get("input_params", {}) or form_values or {}
+        async with _async_session() as bg_db:
+            try:
+                model_id = node.get("model", "")
+                category = node.get("category", "")
+                form_values = node.get("formValues", {})
 
-            # 解析 params 中的模板引用（{{ upstreamNode.outputs[0].value }}），
-            # 将上游节点输出注入到 input_params 中缺失的字段
-            input_params = _resolve_edge_params(node, node_outputs)
+                # 从 input_params 读取基础参数（表单填写的值）
+                input_params_raw = node.get("input_params", {}) or form_values or {}
 
-            # input_params 至少要有基础数据
-            if not input_params:
-                input_params = dict(input_params_raw)
+                # 解析 params 中的模板引用（{{ upstreamNode.outputs[0].value }}），
+                # 将上游节点输出注入到 input_params 中缺失的字段
+                input_params = _resolve_edge_params(node, node_outputs)
 
-            logger.info(
-                "[workflow] executing node=%s model=%s input_keys=%s",
-                node_id, model_id, list(input_params.keys()),
-            )
+                # input_params 至少要有基础数据
+                if not input_params:
+                    input_params = dict(input_params_raw)
 
-            # ---- passthrough 节点 ----
-            if model_id.endswith("-passthrough") or model_id in ("text-passthrough", "image-passthrough", "video-passthrough", "audio-passthrough"):
-                field_keys = ["prompt", "image_url", "video_url", "audio_url"]
-                found = False
-                for key in field_keys:
-                    if key in input_params and input_params[key]:
-                        type_map = {"prompt": "text", "image_url": "image_url", "video_url": "video_url", "audio_url": "audio_url"}
-                        output_type = type_map.get(key, "text")
-                        result = {"outputs": [{"type": output_type, "value": input_params[key]}]}
-                        status = "succeeded"
-                        found = True
-                        break
-                if not found:
-                    result = {"outputs": [{"type": "text", "value": str(input_params)}]}
-                    status = "succeeded"
+                logger.info(
+                    "[workflow] executing node=%s model=%s input_keys=%s",
+                    node_id, model_id, list(input_params.keys()),
+                )
 
-            # ---- utility 节点 ----
-            elif category == "utility" or model_id == "prompt-concatenator":
-                prompts = input_params.get("prompts", [])
-                if isinstance(prompts, list):
-                    prompt_val = "\n\n".join([str(p.get("value", p)) if isinstance(p, dict) else str(p) for p in prompts])
-                else:
-                    prompt_val = input_params.get("prompt", "")
-                result = {"outputs": [{"type": "text", "value": prompt_val}]}
-                status = "succeeded"
-
-            # ---- video-combiner 节点 ----
-            elif model_id == "video-combiner":
-                videos = input_params.get("videos_list", [])
-                aspect_ratio = input_params.get("aspect_ratio", "auto")
-                result = {"outputs": [{"type": "text", "value": f"Video Combiner: {len(videos)} clips, aspect_ratio={aspect_ratio}."}]}
-                status = "succeeded"
-
-            # ---- 常规 AI 服务 ----
-            else:
-                service = get_service(model_id)
-                if service:
-                    result = await service.generate(input_params, model=model_id)
-                    status = "succeeded"
-                else:
-                    # ComponentRegistry 回退
-                    component = ComponentRegistry.get(model_id)
-                    if component:
-                        try:
-                            # 优先使用组件管理页配置的凭据，缺失回退到 .env
-                            component_credentials = ComponentRegistry.get_credentials(model_id)
-                            # 刷新 COS 预签名 URL（避免下游 API 无法下载参考图）
-                            resolved_params = _refresh_cos_urls(input_params)
-                            result = await component.execute(inputs=resolved_params, params=resolved_params, credentials=component_credentials)
+                # ---- passthrough 节点 ----
+                if model_id.endswith("-passthrough") or model_id in ("text-passthrough", "image-passthrough", "video-passthrough", "audio-passthrough"):
+                    field_keys = ["prompt", "image_url", "video_url", "audio_url"]
+                    found = False
+                    for key in field_keys:
+                        if key in input_params and input_params[key]:
+                            type_map = {"prompt": "text", "image_url": "image_url", "video_url": "video_url", "audio_url": "audio_url"}
+                            output_type = type_map.get(key, "text")
+                            result = {"outputs": [{"type": output_type, "value": input_params[key]}]}
                             status = "succeeded"
-                            logger.info(f"Custom component {model_id} executed in workflow run")
-                        except Exception as comp_err:
-                            result = {"outputs": [{"type": "text", "value": f"组件执行失败: {str(comp_err)}"}]}
-                            status = "failed"
-                            logger.error(f"Custom component {model_id} failed: {comp_err}")
+                            found = True
+                            break
+                    if not found:
+                        result = {"outputs": [{"type": "text", "value": str(input_params)}]}
+                        status = "succeeded"
+
+                # ---- utility 节点 ----
+                elif category == "utility" or model_id == "prompt-concatenator":
+                    prompts = input_params.get("prompts", [])
+                    if isinstance(prompts, list):
+                        prompt_val = "\n\n".join([str(p.get("value", p)) if isinstance(p, dict) else str(p) for p in prompts])
                     else:
-                        result = {"outputs": [{"type": "text", "value": f"Model '{model_id}' not configured locally. Configure AI provider in .env."}]}
-                        status = "failed"
+                        prompt_val = input_params.get("prompt", "")
+                    result = {"outputs": [{"type": "text", "value": prompt_val}]}
+                    status = "succeeded"
 
-        except Exception as e:
-            logger.error(f"Error running node {node_id}: {e}")
-            result = {"outputs": [{"type": "text", "value": f"Error: {str(e)}"}]}
-            status = "failed"
+                # ---- video-combiner 节点 ----
+                elif model_id == "video-combiner":
+                    videos = input_params.get("videos_list", [])
+                    aspect_ratio = input_params.get("aspect_ratio", "auto")
+                    result = {"outputs": [{"type": "text", "value": f"Video Combiner: {len(videos)} clips, aspect_ratio={aspect_ratio}."}]}
+                    status = "succeeded"
 
-        # 存储节点输出，供下游节点解析边缘引用
-        if result and isinstance(result, dict):
-            outputs_list = result.get("outputs", [])
-            if outputs_list:
-                node_outputs[node_id] = outputs_list
+                # ---- 常规 AI 服务 ----
+                else:
+                    service = get_service(model_id)
+                    if service:
+                        result = await service.generate(input_params, model=model_id)
+                        status = "succeeded"
+                    else:
+                        # ComponentRegistry 回退
+                        component = ComponentRegistry.get(model_id)
+                        if component:
+                            try:
+                                # 优先使用组件管理页配置的凭据，缺失回退到 .env
+                                component_credentials = ComponentRegistry.get_credentials(model_id)
+                                # 刷新 COS 预签名 URL（避免下游 API 无法下载参考图）
+                                resolved_params = _refresh_cos_urls(input_params)
+                                result = await component.execute(inputs=resolved_params, params=resolved_params, credentials=component_credentials)
+                                status = "succeeded"
+                                logger.info(f"Custom component {model_id} executed in workflow run")
+                            except Exception as comp_err:
+                                result = {"outputs": [{"type": "text", "value": f"组件执行失败: {str(comp_err)}"}]}
+                                status = "failed"
+                                logger.error(f"Custom component {model_id} failed: {comp_err}")
+                        else:
+                            result = {"outputs": [{"type": "text", "value": f"Model '{model_id}' not configured locally. Configure AI provider in .env."}]}
+                            status = "failed"
 
-        # 更新运行记录
-        await db.execute(
-            update(RunHistory)
-            .where(RunHistory.run_id == run_id, RunHistory.node_id == node_id)
-            .values(status=status, result=result, updated_at=datetime.now(timezone.utc))
-        )
+            except Exception as e:
+                logger.error(f"Error running node {node_id}: {e}")
+                result = {"outputs": [{"type": "text", "value": f"Error: {str(e)}"}]}
+                status = "failed"
 
-    await db.flush()
-    return {"run_id": run_id}
+            # 存储节点输出，供下游节点解析边缘引用
+            if result and isinstance(result, dict):
+                outputs_list = result.get("outputs", [])
+                if outputs_list:
+                    node_outputs[node_id] = outputs_list
+
+            # 更新运行记录
+            await bg_db.execute(
+                update(RunHistory)
+                .where(RunHistory.run_id == run_id, RunHistory.node_id == node_id)
+                .values(status=status, result=result, updated_at=datetime.now(timezone.utc))
+            )
+            await bg_db.commit()
+
+    logger.info("[workflow] run_id=%s all nodes executed", run_id)
 
 
 async def run_node_helper(db: AsyncSession, workflow_id: str, node_id: str, payload: dict) -> dict:
