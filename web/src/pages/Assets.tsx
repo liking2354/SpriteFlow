@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Segment } from "@/components/ui/Segment";
 import { GroupSidebar } from "@/components/GroupSidebar";
 import { AssetPreviewModal } from "@/components/AssetPreviewModal";
+import { VideoPreviewModal } from "@/components/VideoPreviewModal";
 import { useConfirm } from "@/components/ui/Confirm";
 
 type SourceFilter = "all" | "upload" | "image" | "video" | "audio" | "text";
@@ -37,6 +38,14 @@ function sourceColor(s: string, type: string): string {
   if (type === "text") return "var(--cyan)";
   if (s === "uploaded") return "var(--cyan)";
   return "var(--acc)";
+}
+
+/** 格式化秒数为 mm:ss */
+function formatDuration(seconds: number | null | undefined): string {
+  if (!seconds || seconds <= 0) return "";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 async function downloadAssetFile(asset: AssetItem) {
@@ -201,6 +210,7 @@ export function AssetsPage() {
           source === "video" ? "video" :
           source === "audio" ? "audio" :
           source === "text" ? "text" :
+          source === "image" ? "image" :
           undefined,
         group_id: groupFilter ?? undefined,
         limit: PAGE_SIZE,
@@ -422,17 +432,31 @@ export function AssetsPage() {
                     >
                       {isVideo ? (
                         <>
-                          <video
-                            src={a.uri}
-                            className="w-full h-full object-cover"
-                            muted
-                            preload="metadata"
-                          />
+                          {a.thumbnail ? (
+                            <img
+                              src={a.thumbnail}
+                              alt=""
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <video
+                              src={a.uri}
+                              className="w-full h-full object-cover"
+                              muted
+                              preload="metadata"
+                            />
+                          )}
                           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                             <div className="w-8 h-8 rounded-full bg-black/60 flex items-center justify-center text-white text-sm">
                               ▶
                             </div>
                           </div>
+                          {a.duration != null && a.duration > 0 && (
+                            <div className="absolute bottom-0 right-0 px-1 py-0.5 text-[7px] font-mono text-white bg-black/70 rounded-tl-sm">
+                              {formatDuration(a.duration)}
+                            </div>
+                          )}
                         </>
                       ) : isAudio ? (
                         <div className="w-full h-full flex flex-col items-center justify-center bg-bg-0 p-2">
@@ -491,7 +515,7 @@ export function AssetsPage() {
                         )}
                       </div>
                       <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 bg-gradient-to-t from-black/80 text-[8.5px] font-mono text-white text-left">
-                        {isVideo ? "MP4" : isAudio ? "AUDIO" : isText ? "TXT" : `${a.width ?? "-"}×${a.height ?? "-"}`}
+                        {isVideo ? `${a.width ?? "-"}×${a.height ?? "-"}` : isAudio ? "AUDIO" : isText ? "TXT" : `${a.width ?? "-"}×${a.height ?? "-"}`}
                       </div>
                     </button>
                   );
@@ -559,7 +583,20 @@ export function AssetsPage() {
       )}
 
       {/* 预览弹窗 */}
-      {previewAsset && (
+      {previewAsset && previewAsset.type === "video" ? (
+        <VideoPreviewModal
+          asset={previewAsset}
+          onClose={() => setPreviewAsset(null)}
+          onEdit={(id) => navigate(`/editor?asset=${encodeURIComponent(id)}`)}
+          onDownload={async (a) => {
+            try { await downloadAssetFile(a); } catch { alert(t("common.error")); }
+          }}
+          onDelete={async (id) => {
+            if (await confirm({ message: t("assets.deleteConfirm", "确定删除？"), variant: "danger" }))
+              del.mutate(id);
+          }}
+        />
+      ) : previewAsset ? (
         <AssetPreviewModal
           asset={previewAsset}
           onClose={() => setPreviewAsset(null)}
@@ -572,7 +609,7 @@ export function AssetsPage() {
               del.mutate(id);
           }}
         />
-      )}
+      ) : null}
     </div>
   );
 }

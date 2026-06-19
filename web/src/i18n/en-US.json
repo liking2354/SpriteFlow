@@ -201,6 +201,7 @@
     "unpublish": "Unpublish",
     "running": "Running...",
     "runAll": "Run All",
+    "resumeFromFailed": "Resume from Failed",
     "duplicating": "Duplicating...",
     "cannotEdit": "This workflow can't be edited.",
     "utilityNode": "Utility Node",

@@ -208,6 +208,7 @@
     "unpublish": "取消发布",
     "running": "运行中...",
     "runAll": "全部运行",
+    "resumeFromFailed": "从失败恢复",
     "duplicating": "复制中...",
     "cannotEdit": "此工作流无法编辑。",
     "utilityNode": "工具节点",

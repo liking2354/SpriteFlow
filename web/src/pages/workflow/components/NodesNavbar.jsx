@@ -26,6 +26,16 @@ const SPECIAL_MODEL_KEYS = {
   "audio-passthrough": "navbar.inputAudio",
 };
 
+/** 根据组件的 output_type 推导正确的节点类型 */
+const getCustomNodeType = (model) => {
+  const outputType = model?._component?.output_type || "";
+  if (outputType.includes("image")) return "imageNode";
+  if (outputType.includes("video")) return "videoNode";
+  if (outputType.includes("audio")) return "audioNode";
+  if (outputType.includes("text")) return "textNode";
+  return "videoNode"; // fallback
+};
+
 const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchemas = {} }) => {
   const { t } = useTranslation();
   const [activeSubMenu, setActiveSubMenu] = useState(null);
@@ -42,7 +52,7 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
     if (id === 'api-models') return 'apiNode';
     if (id === 'custom-video') return 'videoNode';
     if (id === 'custom-image') return 'imageNode';
-    if (id === 'custom-other') return 'videoNode';
+    if (id === 'custom-other') return ['imageNode', 'videoNode', 'audioNode', 'textNode'];
     return null;
   };
 
@@ -211,7 +221,7 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
       case "api-models": return categorizedModels.api.map(m => ({ label: m.name, model: m, type: "apiNode" }));
       case "custom-video": return categorizedModels.customVideo.map(m => ({ label: m.name, model: m, type: "videoNode" }));
       case "custom-image": return categorizedModels.customImage.map(m => ({ label: m.name, model: m, type: "imageNode" }));
-      case "custom-other": return categorizedModels.customOther.map(m => ({ label: m.name, model: m, type: "videoNode" }));
+      case "custom-other": return categorizedModels.customOther.map(m => ({ label: m.name, model: m, type: getCustomNodeType(m) }));
       default: return [];
     }
   };
@@ -237,7 +247,7 @@ const NodesNavbar = ({ addNode, apiNodeModels, filterNodeTypes = null, nodeSchem
       ...textUtils.map(m => ({ ...m, type: m.id === "video-combiner" ? "vidConcatNode" : "concatNode" })),
       ...customVideo.map(m => ({ ...m, type: "videoNode" })),
       ...customImage.map(m => ({ ...m, type: "imageNode" })),
-      ...customOther.map(m => ({ ...m, type: "videoNode" })),
+      ...customOther.map(m => ({ ...m, type: getCustomNodeType(m) })),
       ...apiNodeModels.map(m => ({ ...m, type: "apiNode" })),
     ];
 

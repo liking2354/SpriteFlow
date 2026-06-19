@@ -5,6 +5,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { FiSettings, FiZap, FiRepeat } from "react-icons/fi";
+import { FaStar, FaRegStar } from "react-icons/fa6";
 import { api, subscribeGenerateStream } from "@/api/client";
 import type { GenerateMode, GenerateRequest, JobItem } from "@/api/types";
 import { Card } from "@/components/ui/Card";
@@ -345,7 +347,7 @@ export function GeneratePage() {
           {/* 高级 */}
           <details className="mb-4">
             <summary className="text-[11px] text-txt-2 cursor-pointer hover:text-txt-0 select-none mb-2">
-              ⚙ 高级选项
+              <FiSettings size={14} className="inline" /> 高级选项
             </summary>
             <div className="grid grid-cols-2 gap-3 mt-2">
               <Field label={t("generate.fields.seed")}>
@@ -392,7 +394,7 @@ export function GeneratePage() {
               disabled={!!streaming}
               className="flex-1"
             >
-              ▶ {generate.isPending ? t("generate.actions.generating") : t("generate.actions.generate")}
+              {generate.isPending ? t("generate.actions.generating") : t("generate.actions.generate")}
             </Button>
             {mode === "sequential" && (
               <Button
@@ -401,7 +403,7 @@ export function GeneratePage() {
                 onClick={handleStream}
                 disabled={generate.isPending}
               >
-                ⚡ {t("generate.actions.stream")}
+                <FiZap size={14} /> {t("generate.actions.stream")}
               </Button>
             )}
           </div>

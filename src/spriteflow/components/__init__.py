@@ -25,8 +25,18 @@ logger = logging.getLogger(__name__)
 def _register_all():
     """注册所有组件"""
     from .ai.seedance_pro_fast import SeedanceProFastComponent
+    from .image.image_input import ImageInputComponent
+    from .image.remove_bg import RemoveBGComponent
+    from .image.sprite_crop import SpriteCropComponent
+    from .image.grid_merge import ImageGridMergeComponent
+    from .video.frame_extract import VideoFrameExtractComponent
 
     ComponentRegistry.register(SeedanceProFastComponent())
+    ComponentRegistry.register(ImageInputComponent())
+    ComponentRegistry.register(RemoveBGComponent())
+    ComponentRegistry.register(SpriteCropComponent())
+    ComponentRegistry.register(ImageGridMergeComponent())
+    ComponentRegistry.register(VideoFrameExtractComponent())
 
 
 # 模块加载时自动注册

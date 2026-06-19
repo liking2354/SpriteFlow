@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { FiChevronDown, FiChevronRight, FiInfo } from "react-icons/fi";
 import type { CanvasNodeStatus } from "./useGraphRun";
 
 export interface LogEntry {
@@ -27,14 +28,6 @@ interface ExecutionLogProps {
 }
 
 let _logCounter = 0;
-
-const STATUS_ICONS: Record<string, string> = {
-  pending: "⏳",
-  queued: "📋",
-  running: "🔄",
-  completed: "✅",
-  failed: "❌",
-};
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "#f59e0b",
@@ -121,7 +114,7 @@ export function ExecutionLog({ nodeStatuses, nodeLabels, isRunning, defaultColla
             </span>
           )}
           {isRunning && (
-            <span className="animate-spin text-[10px]">⏳</span>
+            <span className="animate-spin inline-block w-3 h-3 border-2 border-white/30 border-t-white/80 rounded-full" />
           )}
           {!isRunning && logs.length > 0 && (
             <button
@@ -140,8 +133,8 @@ export function ExecutionLog({ nodeStatuses, nodeLabels, isRunning, defaultColla
             </button>
           )}
         </div>
-        <span className="text-[10px]" style={{ color: "var(--txt-3)" }}>
-          {collapsed ? "▶" : "▼"}
+        <span className="text-[12px]" style={{ color: "var(--txt-3)" }}>
+          {collapsed ? <FiChevronRight size={14} /> : <FiChevronDown size={14} />}
         </span>
       </button>
 
@@ -180,7 +173,7 @@ export function ExecutionLog({ nodeStatuses, nodeLabels, isRunning, defaultColla
                     }}
                   >
                     <span className="shrink-0 mt-px" title={log.event}>
-                      {STATUS_ICONS[log.event] ?? "ℹ️"}
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: STATUS_COLORS[log.event] ?? "var(--txt-3)", display: "inline-block" }} />
                     </span>
                     <div className="min-w-0 flex-1">
                       <span className="font-medium" style={{ color: "var(--txt-1)" }}>

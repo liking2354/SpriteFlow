@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import httpx
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Form, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 
@@ -152,6 +152,17 @@ async def upload_asset(
             data=data,
             filename=file.filename or "",
             source="uploaded",
+            tags=tag_list,
+            parent_id=parent_id,
+            group_id=group_id,
+        )
+    elif content_type.startswith("video/"):
+        # 从 Content-Type 推断扩展名和 MIME
+        ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "mp4"
+        asset = await pipeline.ingest_video(
+            data=data,
+            ext=ext,
+            content_type=content_type,
             tags=tag_list,
             parent_id=parent_id,
             group_id=group_id,
@@ -352,32 +363,91 @@ def _is_url_allowed(url: str) -> bool:
 
 
 @router.get("/assets/{asset_id}/raw")
-async def proxy_asset_raw(asset_id: str, thumb: bool = Query(False)):
-    """通过 asset_id 同源拉取原图/缩略图（自动签名 + 流式回吐）。"""
+async def proxy_asset_raw(asset_id: str, thumb: bool = Query(False), request: Request = None):
+    """通过 asset_id 同源拉取原图/缩略图（自动签名 + Range 支持 + 流式回吐）。"""
     db = get_db()
     storage = get_storage()
     asset = await db.get_asset(asset_id)
     if not asset:
         raise HTTPException(status_code=404, detail=f"素材不存在: {asset_id}")
 
-    # 本地存储：直接读取文件
+    is_video = asset.type == "video"
+    target_uri = (asset.thumbnail if thumb and asset.thumbnail else asset.uri)
+
+    # 推断 media_type
+    if is_video:
+        media_type = asset.mime_type or "video/mp4"
+    elif target_uri.endswith(".png"):
+        media_type = "image/png"
+    elif target_uri.endswith(".jpg") or target_uri.endswith(".jpeg"):
+        media_type = "image/jpeg"
+    else:
+        media_type = "application/octet-stream"
+
+    # Range 请求头
+    range_header = request.headers.get("Range") if request else None
+
+    # 本地存储：直接读取文件，支持 Range
     from ..storage.local_storage import LocalStorage
     if isinstance(storage, LocalStorage):
-        target_uri = (asset.thumbnail if thumb and asset.thumbnail else asset.uri)
         path = storage._uri_to_path(target_uri)
         if not path.exists():
             raise HTTPException(status_code=404, detail="文件不存在")
-        media_type = "image/png" if path.suffix == ".png" else "image/jpeg"
+        file_size = path.stat().st_size
+
+        if range_header:
+            return _serve_file_range(path, file_size, range_header, media_type)
+
         return FileResponse(path, media_type=media_type)
 
     # COS 存储：生成预签名 URL 并代理
-    target_uri = asset.thumbnail if thumb and asset.thumbnail else asset.uri
     try:
         url = await storage.get_presigned_url(target_uri, expires=600)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"签名失败: {e}") from e
 
     return await _stream_proxy(url)
+
+
+def _serve_file_range(path, file_size: int, range_header: str, media_type: str):
+    """处理 HTTP Range 请求，返回 206 Partial Content。"""
+    import re
+
+    match = re.match(r"bytes=(\d+)-(\d*)", range_header)
+    if not match:
+        raise HTTPException(status_code=416, detail="无效的 Range 请求头")
+
+    start = int(match.group(1))
+    end_str = match.group(2)
+    end = int(end_str) if end_str else file_size - 1
+
+    if start >= file_size or end >= file_size:
+        raise HTTPException(status_code=416, detail="Range 超出文件大小")
+
+    chunk_size = end - start + 1
+
+    async def range_iterator():
+        with open(path, "rb") as f:
+            f.seek(start)
+            remaining = chunk_size
+            while remaining > 0:
+                chunk = f.read(min(64 * 1024, remaining))
+                if not chunk:
+                    break
+                yield chunk
+                remaining -= len(chunk)
+
+    from starlette.responses import StreamingResponse
+    return StreamingResponse(
+        range_iterator(),
+        status_code=206,
+        media_type=media_type,
+        headers={
+            "Content-Range": f"bytes {start}-{end}/{file_size}",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(chunk_size),
+        },
+    )
 
 
 @router.get("/proxy-image")

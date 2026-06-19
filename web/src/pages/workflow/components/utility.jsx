@@ -827,31 +827,27 @@ export const downloadFile = async (file_url, filename = "download") => {
     return;
   }
 
-  const response = await axios.post("/api/workflow/cloudfront-signed-url",
-    {
-      url: file_url
-    }
-  );
-
-  const signed_url = response.data.signed_url;
-
-  try {
-    const response = await fetch(signed_url, { mode: "cors" });
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    window.URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error("Download failed:", err);
-    toast.error("Download failed");
+  // 自动补齐文件扩展名
+  let finalName = filename;
+  if (!finalName.includes(".")) {
+    const urlPath = file_url.split("?")[0];
+    const urlFile = urlPath.split("/").pop() || "";
+    const extMatch = urlFile.match(/\.(\w{2,5})(?:$|[?#])/);
+    const ext = extMatch ? extMatch[1] : "";
+    const typeMap = { jpg: "jpg", jpeg: "jpg", png: "png", gif: "gif", webp: "webp", mp4: "mp4", webm: "webm", mov: "mov", avi: "avi", mp3: "mp3", wav: "wav", ogg: "ogg" };
+    const mapped = typeMap[ext.toLowerCase()] || ext;
+    if (mapped) finalName = `${filename}.${mapped}`;
   }
+
+  // 通过后端代理下载，绕过浏览器 CORS 限制
+  const proxyUrl = `/api/workflow/proxy-download?url=${encodeURIComponent(file_url)}&filename=${encodeURIComponent(finalName)}`;
+
+  const link = document.createElement("a");
+  link.href = proxyUrl;
+  link.download = finalName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
 
 export const presets = [

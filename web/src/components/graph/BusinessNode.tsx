@@ -2,6 +2,7 @@ import { memo, useMemo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
+import { FiUser, FiCompass, FiPlay, FiZap, FiImage, FiBox } from "react-icons/fi";
 import { api } from "@/api/client";
 import type { NodeSchema } from "@/api/types";
 
@@ -38,12 +39,12 @@ const STATUS_COLORS: Record<string, string> = {
   failed: "#ef4444",
 };
 
-const TYPE_ICONS: Record<string, string> = {
-  CharacterMaster:  "👤",
-  DirectionVariant: "🧭",
-  AnimationSprite:  "🏃",
-  SkillVFX:         "💥",
-  ImageFusion:      "🖼️",
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  CharacterMaster:  <FiUser size={14} />,
+  DirectionVariant: <FiCompass size={14} />,
+  AnimationSprite:  <FiPlay size={14} />,
+  SkillVFX:         <FiZap size={14} />,
+  ImageFusion:      <FiImage size={14} />,
 };
 
 const TYPE_I18N_KEYS: Record<string, string> = {
@@ -73,7 +74,7 @@ export const BusinessNode = memo(function BusinessNode({
   const colors = schema?.color
     ? { accent: schema.color, soft: `${schema.color}1a`, glow: `${schema.color}4d` }
     : baseColors;
-  const fallbackMeta = { icon: TYPE_ICONS[d.nodeType] ?? "📦", label: t(TYPE_I18N_KEYS[d.nodeType] ?? "graph.unknown", d.nodeType) as string };
+  const fallbackMeta = { icon: TYPE_ICONS[d.nodeType] ?? <FiBox size={14} />, label: t(TYPE_I18N_KEYS[d.nodeType] ?? "graph.unknown", d.nodeType) as string };
   const meta = { icon: schema?.icon ?? fallbackMeta.icon, label: schema?.label ?? fallbackMeta.label };
   const inputPorts = schema?.inputs ?? (d.nodeType === "CharacterMaster" ? {} : { image: "IMAGE" });
   const outputPorts = schema?.outputs ?? (d.nodeType === "DirectionVariant" || d.nodeType === "AnimationSprite" || d.nodeType === "SkillVFX" ? { images: "IMAGE_BATCH" } : { image: "IMAGE" });

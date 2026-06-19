@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { ReactFlowProvider } from "@xyflow/react";
+import { FiAlertTriangle, FiArrowLeft } from "react-icons/fi";
+import { IoClose } from "react-icons/io5";
 import { api } from "@/api/client";
 import { PipelineCanvas } from "@/components/graph/PipelineCanvas";
 import { NodePalette } from "@/components/graph/NodePalette";
@@ -246,7 +248,7 @@ export function GraphEditorPage() {
     : runState.graphStatus === "completed"
       ? t("graph.runDone", "执行完成")
       : runState.graphStatus === "failed"
-        ? `⚠ ${runState.error ?? t("graph.runFailed", "执行失败")}`
+        ? <><FiAlertTriangle size={14} className="inline shrink-0" /> {runState.error ?? t("graph.runFailed", "执行失败")}</>
         : null;
 
   const nodeLabels = useMemo(
@@ -277,7 +279,7 @@ export function GraphEditorPage() {
           style={{ borderColor: "var(--line)", background: "var(--bg-1)" }}
         >
           <Button size="sm" variant="ghost" onClick={handleBack}>
-            ← {t("graph.backToList", "返回列表")}
+            <FiArrowLeft size={14} /> {t("graph.backToList", "返回列表")}
           </Button>
           <PresetPipelines onLoad={handleLoadPreset} />
           <input
@@ -312,7 +314,7 @@ export function GraphEditorPage() {
             }}
             title={t("graph.toggleConsole", "切换日志控制台")}
           >
-            {runState.isRunning && <span className="animate-spin mr-1">⏳</span>}
+            {runState.isRunning && <span className="animate-spin inline-block w-3 h-3 mr-1 border-2 border-white/30 border-t-[var(--acc)] rounded-full" />}
             {t("graph.console", "日志")}
             {hasNodeActivity && (
               <span className="ml-1 text-[9px] px-1 py-px rounded-full" style={{ background: "#ffffff15", color: "var(--txt-3)" }}>
@@ -333,7 +335,7 @@ export function GraphEditorPage() {
           >
             {runState.isRunning
               ? t("common.running")
-              : t("graph.run", "▶ 运行")}
+              : t("graph.run", "运行")}
           </Button>
         </div>
 
@@ -462,7 +464,7 @@ export function GraphEditorPage() {
                 className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full bg-black/60 text-white text-lg hover:bg-black/80"
                 onClick={() => setPreviewNodeId(null)}
               >
-                ×
+                <IoClose size={18} />
               </button>
               <div className="absolute bottom-2 left-2 px-2 py-1 rounded text-[11px] bg-black/60 text-white/80">
                 {previewNodeId}

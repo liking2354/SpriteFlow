@@ -20,6 +20,34 @@ import { Segment } from "@/components/ui/Segment";
 import { Field, TextInput, Switch } from "@/components/ui/Field";
 import { AssetPicker } from "@/components/ui/AssetPicker";
 import {
+  FiAlertTriangle,
+  FiUpload,
+  FiArrowUp,
+  FiArrowDown,
+  FiArrowLeft,
+  FiArrowRight,
+  FiPlusSquare,
+  FiInfo,
+  FiScissors,
+  FiCopy,
+  FiRepeat,
+  FiTrash2,
+  FiSave,
+  FiSearch,
+  FiDownload,
+  FiBox,
+  FiFilm,
+  FiChevronsLeft,
+  FiChevronsRight,
+  FiChevronLeft,
+  FiChevronRight,
+  FiMinus,
+  FiPlus,
+} from "react-icons/fi";
+import { FaCheck, FaChevronDown, FaPause, FaPlay } from "react-icons/fa6";
+import { IoImageOutline, IoClose } from "react-icons/io5";
+import { LuArrowLeftRight, LuArrowUpDown } from "react-icons/lu";
+import {
   type Frame,
   loadImage,
   splitGridByBoundaries,
@@ -608,7 +636,7 @@ export function SpriteSheetPage() {
       {/* 全局错误提示 */}
       {loadErr && (
         <div className="px-3 py-2 bg-[var(--red)]/10 border border-[var(--red)]/30 rounded-s text-[11.5px] text-[var(--red)]">
-          ⚠ {loadErr}
+          <FiAlertTriangle size={14} className="inline shrink-0" /> {loadErr}
         </div>
       )}
 
@@ -634,7 +662,7 @@ export function SpriteSheetPage() {
                   onClick={() => fileRef.current?.click()}
                   className="cursor-pointer rounded-l border-2 border-dashed border-line hover:border-[var(--acc)] hover:bg-[var(--acc-soft)]/40 transition-colors py-10 grid place-items-center text-center"
                 >
-                  <div className="text-[22px] mb-2 opacity-60">⬆</div>
+                  <div className="mb-2 opacity-60"><FiUpload size={22} /></div>
                   <div className="text-[12.5px] text-txt-1 font-medium mb-1">
                     {t("spritesheet.dropTitle")}
                   </div>
@@ -661,10 +689,10 @@ export function SpriteSheetPage() {
                   onClick={() => fileRef.current?.click()}
                   loading={uploadMut.isPending}
                 >
-                  ↑ {t("spritesheet.upload")}
+                  <FiArrowUp size={14} /> {t("spritesheet.upload")}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setPickerOpen(true)}>
-                  ⊞ {t("spritesheet.fromLibrary")}
+                  <FiPlusSquare size={14} /> {t("spritesheet.fromLibrary")}
                 </Button>
               </div>
             </Card>
@@ -784,11 +812,11 @@ export function SpriteSheetPage() {
                 )}
                 {mode === "grid" && (
                   <div className="text-[10.5px] text-txt-3 leading-relaxed -mt-1">
-                    💡 {t("spritesheet.dragHint")}
+                    <FiInfo size={14} className="inline shrink-0" /> {t("spritesheet.dragHint")}
                   </div>
                 )}
                 <Button variant="primary" className="w-full mt-1" onClick={doSplit}>
-                  ✂ {t("spritesheet.doSplit")}
+                  <FiScissors size={14} /> {t("spritesheet.doSplit")}
                 </Button>
               </Card>
             )}
@@ -832,14 +860,14 @@ export function SpriteSheetPage() {
             actions={
               <div className="flex flex-wrap items-center gap-1.5">
                 {/* 批量操作：紧凑图标按钮，hover 显 tooltip */}
-                <IconBatch disabled={!hasSelection} onClick={batchDuplicate} title={t("spritesheet.batchDuplicate")}>⎘</IconBatch>
-                <IconBatch disabled={!hasSelection} onClick={batchFlip} title={t("spritesheet.batchFlip")}>⇋</IconBatch>
-                <IconBatch disabled={!hasSelection} onClick={batchDelete} title={t("spritesheet.batchDelete")} danger>🗑</IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={batchDuplicate} title={t("spritesheet.batchDuplicate")}><FiCopy size={14} /></IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={batchFlip} title={t("spritesheet.batchFlip")}><FiRepeat size={14} /></IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={batchDelete} title={t("spritesheet.batchDelete")} danger><FiTrash2 size={14} /></IconBatch>
                 <span className="mx-0.5 w-px h-4 bg-line" />
-                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedRows(-1)} title={t("spritesheet.moveUp")}>↑</IconBatch>
-                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedRows(1)} title={t("spritesheet.moveDown")}>↓</IconBatch>
-                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedCols(-1)} title={t("spritesheet.moveLeft")}>←</IconBatch>
-                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedCols(1)} title={t("spritesheet.moveRight")}>→</IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedRows(-1)} title={t("spritesheet.moveUp")}><FiArrowUp size={13} /></IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedRows(1)} title={t("spritesheet.moveDown")}><FiArrowDown size={13} /></IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedCols(-1)} title={t("spritesheet.moveLeft")}><FiArrowLeft size={13} /></IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedCols(1)} title={t("spritesheet.moveRight")}><FiArrowRight size={13} /></IconBatch>
                 <span className="mx-0.5 w-px h-4 bg-line" />
                 <button
                   onClick={() => selectAll(true)}
@@ -1009,7 +1037,7 @@ export function SpriteSheetPage() {
                               color: f.selected ? "#fff" : "var(--txt-3)",
                             }}
                           >
-                            {f.selected ? "✓" : ""}
+                            {f.selected ? <FaCheck size={10} /> : ""}
                           </button>
                           <div className="absolute inset-x-0 bottom-0 flex justify-center gap-1 py-0.5 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity">
                             <IconMini
@@ -1019,7 +1047,7 @@ export function SpriteSheetPage() {
                                 duplicateFrame(f.id);
                               }}
                             >
-                              ⎘
+                              <FiCopy size={12} />
                             </IconMini>
                             <IconMini
                               title={t("spritesheet.flip")}
@@ -1028,7 +1056,7 @@ export function SpriteSheetPage() {
                                 flipFrame(f.id);
                               }}
                             >
-                              ⇋
+                              <FiRepeat size={12} />
                             </IconMini>
                             <IconMini
                               title={t("common.delete")}
@@ -1037,7 +1065,7 @@ export function SpriteSheetPage() {
                                 deleteFrame(f.id);
                               }}
                             >
-                              🗑
+                              <FiTrash2 size={12} />
                             </IconMini>
                           </div>
                         </div>
@@ -1068,7 +1096,7 @@ export function SpriteSheetPage() {
                     setPlaying((p) => !p);
                   }}
                 >
-                  {playing ? "⏸" : "▶"}
+                  {playing ? <FaPause size={14} /> : <FaPlay size={14} />}
                 </Button>
               }
             >
@@ -1185,15 +1213,15 @@ export function SpriteSheetPage() {
                     </div>
                     {/* 第一行：方向微调 + 翻转 */}
                     <div className="flex items-center gap-1.5">
-                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, -1, 0)}>←</NudgeBtn>
-                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, 1, 0)}>→</NudgeBtn>
-                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, 0, -1)}>↑</NudgeBtn>
-                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, 0, 1)}>↓</NudgeBtn>
+                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, -1, 0)}><FiArrowLeft size={14} /></NudgeBtn>
+                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, 1, 0)}><FiArrowRight size={14} /></NudgeBtn>
+                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, 0, -1)}><FiArrowUp size={14} /></NudgeBtn>
+                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, 0, 1)}><FiArrowDown size={14} /></NudgeBtn>
                       <button
                         onClick={() => flipFrame(frames[activeIdx].id)}
                         className="ml-auto px-2.5 h-7 rounded-s border border-line bg-bg-3 text-[11px] text-txt-1 hover:text-txt-0 hover:border-[var(--acc)]"
                       >
-                        ⇋ {t("spritesheet.flip")}
+                        <FiRepeat size={14} /> {t("spritesheet.flip")}
                       </button>
                     </div>
                     {/* 第二行：单帧位置移动（在帧序列中） */}
@@ -1205,25 +1233,25 @@ export function SpriteSheetPage() {
                         onClick={() => moveActiveBy(-Infinity)}
                         title={t("spritesheet.moveToFirst")}
                       >
-                        ⇤
+                        <FiChevronsLeft size={14} />
                       </PosBtn>
                       <PosBtn
                         onClick={() => moveActiveBy(-1)}
                         title={t("spritesheet.movePrev")}
                       >
-                        ‹
+                        <FiChevronLeft size={14} />
                       </PosBtn>
                       <PosBtn
                         onClick={() => moveActiveBy(1)}
                         title={t("spritesheet.moveNext")}
                       >
-                        ›
+                        <FiChevronRight size={14} />
                       </PosBtn>
                       <PosBtn
                         onClick={() => moveActiveBy(Infinity)}
                         title={t("spritesheet.moveToLast")}
                       >
-                        ⇥
+                        <FiChevronsRight size={14} />
                       </PosBtn>
                       <span className="ml-auto text-[10.5px] text-txt-3 font-mono">
                         {activeIdx + 1} / {frames.length}
@@ -1236,7 +1264,7 @@ export function SpriteSheetPage() {
                         title={t("spritesheet.duplicateFrame")}
                         className="flex-1 h-7 rounded-s border border-line bg-bg-3 text-[11px] text-txt-1 hover:text-txt-0 hover:border-[var(--acc)]"
                       >
-                        ⎘ {t("spritesheet.duplicateFrame")}
+                        <FiCopy size={14} /> {t("spritesheet.duplicateFrame")}
                       </button>
                       <button
                         onClick={() => {
@@ -1250,7 +1278,7 @@ export function SpriteSheetPage() {
                         title={t("spritesheet.deleteFrame")}
                         className="flex-1 h-7 rounded-s border border-[var(--red)]/40 bg-bg-3 text-[11px] text-[var(--red)] hover:bg-[var(--red)]/10 hover:border-[var(--red)]"
                       >
-                        🗑 {t("spritesheet.deleteFrame")}
+                        <FiTrash2 size={14} /> {t("spritesheet.deleteFrame")}
                       </button>
                     </div>
                     {/* 第四行：等比例缩放 */}
@@ -1325,10 +1353,10 @@ export function SpriteSheetPage() {
             {/* 步骤导航 */}
             <div className="grid grid-cols-2 gap-2">
               <Button variant="ghost" onClick={() => setStep(1)}>
-                ← {t("spritesheet.reSplit")}
+              <FiArrowLeft size={14} /> {t("spritesheet.reSplit")}
               </Button>
               <Button variant="primary" disabled={!canStep3} onClick={() => setStep(3)}>
-                {t("spritesheet.next")} →
+              {t("spritesheet.next")} <FiArrowRight size={14} />
               </Button>
             </div>
           </div>
@@ -1436,7 +1464,7 @@ export function SpriteSheetPage() {
                 onClick={handleSaveSheet}
                 title={t("spritesheet.saveTooltip")}
               >
-                💾 {t("spritesheet.saveLibrary")}
+                <FiSave size={14} /> {t("spritesheet.saveLibrary")}
               </Button>
               <DownloadMenu
                 busy={busy}
@@ -1448,7 +1476,7 @@ export function SpriteSheetPage() {
 
             <div className="flex items-center justify-between pt-4 mt-4 border-t border-line">
               <Button variant="ghost" onClick={() => setStep(2)}>
-                ← {t("spritesheet.prev")}
+              <FiArrowLeft size={14} /> {t("spritesheet.prev")}
               </Button>
             </div>
           </Card>
@@ -1458,7 +1486,7 @@ export function SpriteSheetPage() {
             title={t("spritesheet.recombine")}
             actions={
               <Button size="sm" variant="ghost" onClick={() => setPreviewLightbox(true)}>
-                🔍 {t("spritesheet.viewDetail")}
+                <FiSearch size={14} /> {t("spritesheet.viewDetail")}
               </Button>
             }
           >
@@ -1493,6 +1521,7 @@ export function SpriteSheetPage() {
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         onPick={(a) => setSource(a.uri, a.id)}
+        filterType="image"
       />
     </div>
   );
@@ -1571,7 +1600,7 @@ function Stepper({
                       : "bg-bg-0 text-txt-3 border border-line"
                   }`}
                 >
-                  {done ? "✓" : i + 1}
+                  {done ? <FaCheck size={10} /> : i + 1}
                 </span>
                 <span
                   className={`text-[12.5px] font-medium ${
@@ -1809,13 +1838,13 @@ function SplitPreview({
               onClick={onResetX}
               className="px-2 h-6 rounded-s border border-line bg-bg-3 text-txt-1 hover:text-txt-0 hover:border-[var(--acc)]"
             >
-              ↔ {t("spritesheet.resetCuts")}
+              <LuArrowLeftRight size={14} /> {t("spritesheet.resetCuts")}
             </button>
             <button
               onClick={onResetY}
               className="px-2 h-6 rounded-s border border-line bg-bg-3 text-txt-1 hover:text-txt-0 hover:border-[var(--acc)]"
             >
-              ↕ {t("spritesheet.resetCuts")}
+              <LuArrowUpDown size={14} /> {t("spritesheet.resetCuts")}
             </button>
           </span>
         </div>
@@ -1925,13 +1954,13 @@ function DownloadMenu({
   return (
     <div ref={wrapRef} className="relative">
       <Button variant="outline" loading={isBusy} onClick={() => setOpen((o) => !o)}>
-        ⬇ {t("spritesheet.download")} ▾
+        <FiDownload size={14} /> {t("spritesheet.download")} <FaChevronDown size={10} className="ml-1 opacity-60" />
       </Button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-48 rounded-s border border-line bg-bg-2 shadow-2xl z-30 overflow-hidden">
-          <DLMenuItem onClick={() => { setOpen(false); onPng(); }} icon="🖼" title={t("spritesheet.dlPng")} hint={t("spritesheet.dlPngHint")} />
-          <DLMenuItem onClick={() => { setOpen(false); onZip(); }} icon="📦" title={t("spritesheet.dlZip")} hint={t("spritesheet.dlZipHint")} />
-          <DLMenuItem onClick={() => { setOpen(false); onGif(); }} icon="🎞" title={t("spritesheet.dlGif")} hint={t("spritesheet.dlGifHint")} />
+          <DLMenuItem onClick={() => { setOpen(false); onPng(); }} icon={<IoImageOutline size={16} />} title={t("spritesheet.dlPng")} hint={t("spritesheet.dlPngHint")} />
+          <DLMenuItem onClick={() => { setOpen(false); onZip(); }} icon={<FiBox size={16} />} title={t("spritesheet.dlZip")} hint={t("spritesheet.dlZipHint")} />
+          <DLMenuItem onClick={() => { setOpen(false); onGif(); }} icon={<FiFilm size={16} />} title={t("spritesheet.dlGif")} hint={t("spritesheet.dlGifHint")} />
         </div>
       )}
     </div>
@@ -1944,7 +1973,7 @@ function DLMenuItem({
   hint,
   onClick,
 }: {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   hint: string;
   onClick: () => void;
@@ -1955,7 +1984,7 @@ function DLMenuItem({
       className="w-full text-left px-3 py-2 hover:bg-[var(--acc)]/10 border-b border-line last:border-b-0"
     >
       <div className="flex items-center gap-2 text-[12px] text-txt-1">
-        <span>{icon}</span>
+        <span className="inline-flex">{icon}</span>
         <span>{title}</span>
       </div>
       <div className="text-[10.5px] text-txt-3 mt-0.5 ml-6">{hint}</div>
@@ -2058,13 +2087,13 @@ function Lightbox({
           onClick={() => setZoom((z) => Math.max(0.05, z / 1.2))}
           className="px-2 h-6 rounded-s border border-line bg-bg-3 text-txt-1 hover:border-[var(--acc)]"
         >
-          −
+          <FiMinus size={16} />
         </button>
         <button
           onClick={() => setZoom((z) => Math.min(20, z * 1.2))}
           className="px-2 h-6 rounded-s border border-line bg-bg-3 text-txt-1 hover:border-[var(--acc)]"
         >
-          ＋
+          <FiPlus size={16} />
         </button>
         <button
           onClick={reset}
@@ -2080,7 +2109,7 @@ function Lightbox({
         className="absolute top-3 right-3 w-9 h-9 grid place-items-center rounded-full bg-bg-2 border border-line text-txt-1 hover:bg-bg-3 z-10"
         title={t("spritesheet.close")}
       >
-        ✕
+        <IoClose size={18} />
       </button>
 
       {/* 画布容器 */}

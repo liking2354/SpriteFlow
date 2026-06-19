@@ -108,7 +108,7 @@ const getEdgeColor = (sourceHandle, targetHandle, sourceNode = null, targetNode 
 
   if (["textInput", "textInput4", "imageInput", "videoInput", "audioInput2", "concatInput", "apiInput"].includes(targetHandle)) return "blue";
   if (["textInput2", "textInput3", "imageInput2", "imageInput3", "videoInput2", "videoInput3", "videoInput6", "audioInput3", "apiInput2", "apiInput3"].includes(targetHandle)) return "green";
-  if (["videoInput4", "audioInput4", "videoInput7"].includes(targetHandle)) return "orange";
+  if (["videoInput4", "audioInput4", "videoInput7", "imageInput4"].includes(targetHandle)) return "orange";
   if (["audioInput", "videoInput5", "videoInput8"].includes(targetHandle)) return "yellow";
 
   if (sourceNode) {
@@ -277,6 +277,7 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
   const [activeHandleColor, setActiveHandleColor] = useState(null);
   const [loadingNodes, setLoadingNodes] = useState({});
   const [isRunning, setIsRunning] = useState(0);
+  const [hasFailedNodes, setHasFailedNodes] = useState(false);
   const [dropDown, setDropDown] = useState(0);
   const [workflowName, setWorkflowName] = useState(initialState?.metadata?.workflowName || "Untitled");
   const [workflowId, setWorkflowId] = useState(id);
@@ -292,6 +293,7 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
   const publishingRef = useRef(false);
   const settingsRef = useRef(null);
   const pollIntervalRef = useRef(null);
+  const hasSeenRunningRef = useRef(false);
   const [interactionMode, setInteractionMode] = useState(initialState?.metadata?.interactionMode || false);
   const [publishWorkflow, setPublishWorkflow] = useState(initialState?.metadata?.publishWorkflow || false);
   const [template, setTemplate] = useState(initialState?.metadata?.template || {
@@ -924,7 +926,7 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
             }
 
             if (color === "orange") {
-              if (["videoInput4", "audioInput4"].includes(params.targetHandle)) {
+              if (["videoInput4", "audioInput4", "imageInput4"].includes(params.targetHandle)) {
                 updatedFormValues.video_url = resultValue || null;
               } else if (params.targetHandle === "videoInput7") {
                 const key = updatedFormValues.video_files ? "video_files" : "videos_list";
@@ -1546,6 +1548,9 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
                 return copy;
               });
 
+              // 提取输出类型，用于判断是否需要同步 input_params/image_url
+              const outputType = outputs?.[0]?.type || "";
+
               setNodes((prevNodes) => {
                 let updatedNodes = prevNodes.map((node) => {
                   const nodeIdMatch = id.toLowerCase().replace(/\s+/g, '') === node.id.toLowerCase().replace(/\s+/g, '');
@@ -1558,17 +1563,27 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
                       ? currentHistory.map(h => h.result?.id === result.id ? latestRun : h)
                       : [...currentHistory, latestRun];
 
-                    return {
-                      ...node,
-                      data: {
-                        ...node.data,
-                        outputs,
-                        resultUrl: first,
-                        isLoading: false,
-                        errorMsg: null,
-                        outputHistory: newHistory,
-                      },
+                    // 同步 input_params / formValues 中的媒体 URL（精灵裁剪/image-input 场景关键）
+                    const updatedData = {
+                      ...node.data,
+                      outputs,
+                      resultUrl: first,
+                      isLoading: false,
+                      errorMsg: null,
+                      outputHistory: newHistory,
                     };
+                    if (first && outputType === "image_url") {
+                      updatedData.input_params = { ...node.data.input_params, image_url: first };
+                      updatedData.formValues = { ...node.data.formValues, image_url: first };
+                    } else if (first && outputType === "video_url") {
+                      updatedData.input_params = { ...node.data.input_params, video_url: first };
+                    } else if (first && outputType === "audio_url") {
+                      updatedData.input_params = { ...node.data.input_params, audio_url: first };
+                    } else if (first && outputType === "text") {
+                      updatedData.input_params = { ...node.data.input_params, prompt: first };
+                    }
+
+                    return { ...node, data: updatedData };
                   }
 
                   return node;
@@ -1602,6 +1617,7 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
 
           // 存在运行中的节点时，设置运行态
           if (hasRunning) {
+            hasSeenRunningRef.current = true;
             setIsRunning((prev) => (prev !== 1 ? 1 : prev));
           }
 
@@ -1616,11 +1632,16 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
             clearInterval(interval);
             setLoadingNodes({});
             setIsRunning(0);
+            setHasFailedNodes(false);
           } else if (anyFailed) {
-            toast.error(t('editor.workflowFailedOnNodes'));
             clearInterval(interval);
             setLoadingNodes({});
             setIsRunning(0);
+            setHasFailedNodes(true);
+            // 只有从 running 转变到 failed 时才弹 toast（页面恢复时不弹）
+            if (hasSeenRunningRef.current) {
+              toast.error(t('editor.workflowFailedOnNodes'));
+            }
           }
           console.log("run", runData);
         })
@@ -1639,6 +1660,7 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
   const handleRunWorkflow = async () => {
     if (!interactionMode) return;
     try {
+      hasSeenRunningRef.current = false;  // 新运行重置，确保能检测到失败
       setIsRunning(1);
       setLoadingNodes({});
       const savedWorkflowId = await handleSaveWorkFlow();
@@ -1660,6 +1682,33 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
       }
       setLoadingNodes({});
       setIsRunning(0);
+    }
+  };
+
+  const handleResumeWorkflow = async () => {
+    if (!interactionMode) return;
+    try {
+      hasSeenRunningRef.current = false;
+      setIsRunning(1);
+      setHasFailedNodes(false);
+      setLoadingNodes({});
+
+      const response = await axios.post(`/api/workflow/${workflowId}/resume`);
+      console.log("resume data:", response.data);
+      const existingRunId = response.data.run_id;
+      setRunId(existingRunId);
+      setWorkflowIds(workflowId, existingRunId);
+      // 轮询由 useEffect([runId]) 自动触发
+    } catch (error) {
+      console.log(error);
+      if (error.response) {
+        toast.error(`Failed: ${error.response.data.detail || t('common.serverError')}`);
+      } else {
+        toast.error(`Error: ${error.message}`);
+      }
+      setLoadingNodes({});
+      setIsRunning(0);
+      setHasFailedNodes(true);
     }
   };
 
@@ -1825,7 +1874,7 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
           return "green";
         })(),
         textInput: "blue", textInput2: "green", textInput3: "green", textInput4: "blue", textOutput: "blue",
-        imageInput: "blue", imageInput2: "green", imageInput3: "green", imageOutput: "green",
+        imageInput: "blue", imageInput2: "green", imageInput3: "green", imageInput4: "orange", imageOutput: "green",
         videoInput: "blue", videoInput2: "green", videoInput3: "green", videoInput4: "orange", videoInput5: "yellow", videoInput6: "green", videoInput7: "orange", videoInput8: "yellow", videoOutput: "orange",
         audioInput: "yellow", audioInput2: "blue", audioInput3: "green", audioInput4: "orange", audioOutput: "yellow",
       }
@@ -1871,10 +1920,12 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
         const hasImagePrompt = "prompt" in formValues;
         const hasImagesList = "images_list" in formValues;
         const hasImageImageUrl = "image_url" in formValues;
+        const hasImageVideoUrl = "video_url" in formValues;
         validHandles = [
           hasImagePrompt && "imageInput",
           hasImagesList && "imageInput2",
           hasImageImageUrl && "imageInput3",
+          hasImageVideoUrl && "imageInput4",
         ].filter(Boolean);
         break;
 
@@ -2387,6 +2438,17 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
                     </>
                   )}
                 </button>
+                {hasFailedNodes && !isRunning && (
+                  <button
+                    type="button"
+                    suppressHydrationWarning={true}
+                    disabled={!interactionMode}
+                    onClick={handleResumeWorkflow}
+                    className="flex items-center gap-1.5 px-3 py-1 border border-orange-500/70 bg-orange-500 text-white text-sm rounded-full font-semibold group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-black hover:text-white whitespace-nowrap"
+                  >
+                    <FaPlay size={14} /> {t('editor.resumeFromFailed')}
+                  </button>
+                )}
               </>
             ) : (
               <button

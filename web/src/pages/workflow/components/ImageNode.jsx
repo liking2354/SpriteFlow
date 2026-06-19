@@ -20,7 +20,8 @@ import { useTranslation } from "react-i18next";
 const inputHandles = [
   "imageInput",
   "imageInput2",
-  "imageInput3"
+  "imageInput3",
+  "imageInput4"
 ];
 
 const outputHandles = [
@@ -222,6 +223,7 @@ const ImageGeneration = ({ id, data, selected }) => {
         if (latest.status === "succeeded" || latest.status === "completed") {
           const output = latest.result.outputs;
           const val = output[0]?.value || "";
+          const outputType = output[0]?.type || "";
           
           const currentHistory = data.outputHistory || [];
           const result = latest.result;
@@ -230,7 +232,15 @@ const ImageGeneration = ({ id, data, selected }) => {
             ? currentHistory.map(h => h.result?.id === result.id ? latest : h)
             : [...currentHistory, latest];
 
-          data?.onDataChange?.(id, { outputs: output, resultUrl: val, isLoading: false, errorMsg: null, outputHistory: newHistory });
+          const updatePayload = { outputs: output, resultUrl: val, isLoading: false, errorMsg: null, outputHistory: newHistory };
+          // 同步 input_params / formValues 中的 image_url（精灵裁剪场景关键）
+          if (val && outputType === "image_url") {
+            updatePayload.input_params = { ...data.input_params, image_url: val };
+            updatePayload.formValues = { ...data.formValues, image_url: val };
+            setFormValues(prev => ({ ...prev, image_url: val }));
+          }
+
+          data?.onDataChange?.(id, updatePayload);
           setCurrentHistoryIndex(newHistory.length - 1);
           setCurrentImageIndex(0);
           clearInterval(interval);
@@ -337,6 +347,7 @@ const ImageGeneration = ({ id, data, selected }) => {
   const hasPrompt = properties && "prompt" in properties && !data.selectedModel?.id.includes("passthrough");
   const hasImagesList = properties && "images_list" in properties && !data.selectedModel?.id.includes("passthrough");
   const hasImageUrl = properties && "image_url" in properties && !data.selectedModel?.id.includes("passthrough");
+  const hasVideoUrl = properties && "video_url" in properties && !data.selectedModel?.id.includes("passthrough");
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -344,6 +355,7 @@ const ImageGeneration = ({ id, data, selected }) => {
         hasPrompt && "imageInput",
         hasImageUrl && "imageInput3",
         hasImagesList && "imageInput2",
+        hasVideoUrl && "imageInput4",
       ].filter(Boolean);
 
       setEdges((prevEdges) =>
@@ -354,7 +366,7 @@ const ImageGeneration = ({ id, data, selected }) => {
       );
     }, 2000);
     return () => clearTimeout(timeout);
-  }, [hasPrompt, hasImageUrl, hasImagesList, id, setEdges]);
+  }, [hasPrompt, hasImageUrl, hasImagesList, hasVideoUrl, id, setEdges]);
 
   useEffect(() => {
     const connectedInputs = {};
@@ -850,6 +862,37 @@ const ImageGeneration = ({ id, data, selected }) => {
           Image 
         </p>
       )}   
+      <Handle 
+        type="target" 
+        position={Position.Left} 
+        id="imageInput4" 
+        style={{ 
+          top: 250,
+          opacity: hasVideoUrl ? 1 : 0,
+          pointerEvents: hasVideoUrl ? 'auto' : 'none',
+          width: 12,
+          height: 12,
+          transition: 'all 0.2s ease-in-out',
+        }} 
+        className={`!rounded-full !border-[3px] !left-[-8px] transition-all
+          ${connectedInputs.imageInput4 
+            ? '!bg-orange-600 !border-zinc-900 shadow-[0_0_15px_rgba(249,115,22,0.8)]' 
+            : '!bg-zinc-900 !border-orange-600/50 hover:!border-orange-600 shadow-sm'
+          }
+        `}
+        data-type="orange"
+      />
+      {hasVideoUrl && (
+        <p 
+          className={`absolute -left-10 top-[250px] text-xs text-orange-500 transition-opacity duration-200 ${
+            data.activeHandleColor === "orange"
+              ? "opacity-100" 
+              : "opacity-0 group-hover:opacity-100"
+          }`}
+        > 
+          Video 
+        </p>
+      )}
       <Handle 
         type="source" 
         position={Position.Right} 

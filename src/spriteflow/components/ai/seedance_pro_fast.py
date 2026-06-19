@@ -255,6 +255,8 @@ class SeedanceProFastComponent(Component):
             image_url[:120] if image_url else "NONE",
         )
 
+        # Ark Seedance API: content 是数组，每项含 type 字段
+        # 参考文档: https://www.volcengine.com/docs/82379/1520757
         content: list[dict[str, Any]] = []
         if prompt:
             content.append({"type": "text", "text": prompt})
@@ -276,10 +278,10 @@ class SeedanceProFastComponent(Component):
         }
 
         logger.info(
-            "[SeedanceProFast] API body: model=%s, content_len=%d, content_types=%s",
+            "[SeedanceProFast] API body: model=%s, content_items=%d, has_image=%s",
             model,
             len(content),
-            [c.get("type") for c in content],
+            bool(image_url),
         )
 
         if params.get("num_outputs", 1) > 1:

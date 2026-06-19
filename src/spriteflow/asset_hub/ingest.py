@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import io
+import tempfile
+from pathlib import Path
 from typing import BinaryIO
 
+import cv2
+import numpy as np
 from PIL import Image
 
 from .models import Asset
@@ -30,6 +34,63 @@ def normalize_image(image: Image.Image) -> Image.Image:
     if image.mode != "RGBA":
         image = image.convert("RGBA")
     return image
+
+
+def extract_video_metadata(data: bytes) -> dict:
+    """提取视频元数据：时长、宽高、fps
+
+    Returns:
+        {"duration": float, "width": int, "height": int, "fps": float}
+    """
+    # 写入临时文件供 OpenCV 读取（cv2.VideoCapture 不支持内存读取）
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+        tmp.write(data)
+        tmp_path = tmp.name
+
+    try:
+        cap = cv2.VideoCapture(tmp_path)
+        if not cap.isOpened():
+            return {}
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        duration = frame_count / fps if fps > 0 else 0
+        cap.release()
+        return {"duration": round(duration, 2), "width": width, "height": height, "fps": round(fps, 2)}
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+
+
+def extract_video_thumbnail(data: bytes, size: int = 512) -> bytes | None:
+    """从视频中提取第一帧作为缩略图，返回 PNG 字节。
+
+    Returns:
+        PNG 格式缩略图字节，或 None（提取失败）
+    """
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+        tmp.write(data)
+        tmp_path = tmp.name
+
+    try:
+        cap = cv2.VideoCapture(tmp_path)
+        if not cap.isOpened():
+            return None
+        ret, frame = cap.read()
+        cap.release()
+        if not ret:
+            return None
+
+        # BGR → RGB
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pil_img = Image.fromarray(frame_rgb)
+        pil_img.thumbnail((size, size), Image.Resampling.LANCZOS)
+
+        buf = io.BytesIO()
+        pil_img.save(buf, format="PNG")
+        return buf.getvalue()
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
 
 
 class IngestPipeline:
@@ -185,10 +246,7 @@ class IngestPipeline:
         group_id: str | None = None,
         provenance: dict | None = None,
     ) -> Asset:
-        """把视频字节直接落库到 COS videos/ 目录，并写一条 type=video 的 Asset。
-
-        视频不做规格化、不生成缩略图（前端用 <video poster> 或首帧异步生成）。
-        """
+        """把视频字节落库到存储，提取元数据 + 首帧缩略图，写一条 type=video 的 Asset。"""
         content_hash = compute_content_hash(data)
         existing = await self.db.get_asset_by_hash(content_hash)
         if existing:
@@ -199,14 +257,30 @@ class IngestPipeline:
             file_key, data, prefix=StoragePrefix.VIDEOS, content_type=content_type
         )
 
+        # 提取视频元数据
+        meta = extract_video_metadata(data)
+
+        # 生成首帧缩略图并上传
+        thumbnail_uri: str | None = None
+        try:
+            thumb_data = extract_video_thumbnail(data)
+            if thumb_data:
+                thumb_key = f"{content_hash}.png"
+                thumbnail_uri = await self.storage.upload(
+                    thumb_key, thumb_data, prefix=StoragePrefix.THUMBNAILS
+                )
+        except Exception:
+            pass  # 缩略图生成失败不阻塞入库
+
         asset = Asset(
             type="video",
             source="generated",
             uri=uri,
             hash=content_hash,
-            width=None,
-            height=None,
-            thumbnail=None,
+            width=meta.get("width"),
+            height=meta.get("height"),
+            duration=meta.get("duration"),
+            thumbnail=thumbnail_uri,
             tags=tags or [],
             parent_id=parent_id,
             group_id=group_id,

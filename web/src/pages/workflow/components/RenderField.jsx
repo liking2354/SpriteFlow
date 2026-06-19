@@ -134,7 +134,9 @@ const RenderField = ({ fieldName, meta, idx, formValues, setFormValues, handleCh
             className="flex items-center justify-between gap-1 text-xs text-center text-white w-full h-full cursor-pointer whitespace-nowrap px-3 py-1.5 bg-zinc-900/50 border border-white/10 hover:border-white/20 focus:outline-none rounded-lg transition-all"
           >
             <div className="flex items-center gap-2 truncate">
-              <span className="truncate">{value}</span>
+              <span className="truncate">
+                {meta.enumNames?.[meta.enum.indexOf(value)] || value}
+              </span>
             </div>
             <FaAngleDown
               size={14}
@@ -164,7 +166,7 @@ const RenderField = ({ fieldName, meta, idx, formValues, setFormValues, handleCh
                 }`}
                 onClick={() => {handleChange(fieldName, option); setDropDown(-1)}}
               >
-                <span className="truncate">{option}</span>
+                <span className="truncate">{meta.enumNames?.[i] || option}</span>
                 {formValues[fieldName] === option && (
                   <span className="ml-auto text-blue-400 font-bold">✓</span>
                 )}

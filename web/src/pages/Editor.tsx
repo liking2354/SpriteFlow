@@ -78,6 +78,7 @@ export function EditorPage() {
           pickerSource === "all" ? undefined :
           pickerSource === "upload" ? "uploaded" :
           "generated,derived,ai_processed",
+        type: "image",
         limit: EDITOR_PAGE_SIZE,
         offset: pickerPage * EDITOR_PAGE_SIZE,
       }),

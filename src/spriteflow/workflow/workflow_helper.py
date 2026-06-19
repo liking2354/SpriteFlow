@@ -12,15 +12,17 @@ import re
 import uuid
 import json
 import logging
+import traceback
+import httpx
 from datetime import datetime, timezone
 from typing import Optional, Any
-from sqlalchemy import select, delete, update
+from sqlalchemy import select, delete, update, text, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
 
 from sqlalchemy import select as sa_select
-from .models import Workflow, RunHistory, ModelConfig, WorkflowPreset, gen_uuid
+from .models import Workflow, RunHistory, RunHistoryArchive, ModelConfig, WorkflowPreset, gen_uuid
 from .services.model_registry import get_service, get_node_schemas as local_node_schemas
 from .services.model_registry import get_api_node_schemas as local_api_schemas
 from ..components.registry import ComponentRegistry
@@ -86,13 +88,13 @@ def _resolve_edge_params(
     if not injected:
         return input_params
 
-    # 合并：input_params 已有值优先，只有缺失的才用边缘注入
+    # 合并：边缘连线的值覆盖 input_params 中的旧值（全部运行时上游已产生新输出）
     merged = dict(input_params)
     merge_count = 0
     for key, val in injected.items():
-        if key not in merged or not merged[key]:
-            merged[key] = val
-            merge_count += 1
+        # 边缘值始终覆盖（视觉化编程预期行为：连线代表数据流，应优先于缓存的旧值）
+        merged[key] = val
+        merge_count += 1
 
     if merge_count:
         logger.info(
@@ -104,30 +106,123 @@ def _resolve_edge_params(
     return merged
 
 
-def _refresh_cos_urls(params: dict[str, Any]) -> dict[str, Any]:
-    """清理 input_params 中 COS URL 的过期签名查询参数。
+async def _refresh_cos_urls(params: dict[str, Any]) -> dict[str, Any]:
+    """清理 input_params 中 COS URL 的过期签名查询参数，并将本地 URL / 文件路径上传到 COS。
 
     桶配置为公有读后，去掉 ?q-sign-* 参数即可直接访问，
     不再需要预签名 URL，也不暴露 SecretId。
+    本地 URL（http://127.0.0.1:.../api/workflow/runs/...）和本地文件路径（/tmp/...）
+    对外部 API 不可访问，需要先上传到 COS 获取公网 URL。
+
+    支持字段：
+    - 单值字段：image_url, image, video_url, audio_url, last_image
+    - 数组字段：images_list（图片 URL 列表）
     """
     from urllib.parse import urlparse, urlunparse
+    from ..components.utils import is_local_file_path, upload_file_to_cos
 
     url_keys = ["image_url", "image", "video_url", "audio_url", "last_image"]
     refreshed = dict(params)
 
-    for key in url_keys:
-        url = refreshed.get(key)
-        if isinstance(url, str) and url.startswith(_COS_BASE_URL):
+    async def _process_single_url(key: str, url: str) -> str | None:
+        """处理单个 URL，返回替换后的 URL（无需替换则返回 None）。"""
+        # 本地文件路径（组件 save_image_local 返回）→ 上传到 COS
+        if is_local_file_path(url):
+            try:
+                cos_url = await upload_file_to_cos(url)
+                if cos_url:
+                    logger.info(
+                        "[workflow] uploaded local file→COS for key=%s → %s",
+                        key, cos_url[:120],
+                    )
+                    return cos_url
+            except Exception as e:
+                logger.error("[workflow] failed to upload local file→COS for key=%s: %s", key, e)
+            return None
+
+        # 本地 workflow runs URL → 上传到 COS
+        if "/api/workflow/runs/" in url and "127.0.0.1" in url:
+            try:
+                cos_url = await _upload_local_to_cos(url)
+                if cos_url:
+                    logger.info(
+                        "[workflow] uploaded local→COS for key=%s → %s",
+                        key, cos_url[:120],
+                    )
+                    return cos_url
+            except Exception as e:
+                logger.error("[workflow] failed to upload local→COS for key=%s: %s", key, e)
+            return None
+
+        # 清理 COS 签名参数
+        if url.startswith(_COS_BASE_URL):
             parsed = urlparse(url)
             if parsed.query:
                 clean_url = urlunparse(parsed._replace(query=""))
-                refreshed[key] = clean_url
                 logger.info(
                     "[workflow] stripped COS signature for key=%s → %s",
                     key, clean_url[:120],
                 )
+                return clean_url
+
+        return None
+
+    # 处理单值字段
+    for key in url_keys:
+        url = refreshed.get(key)
+        if not isinstance(url, str) or not url:
+            continue
+        new_url = await _process_single_url(key, url)
+        if new_url:
+            refreshed[key] = new_url
+
+    # 处理 images_list 数组字段
+    images_list = refreshed.get("images_list")
+    if isinstance(images_list, list) and images_list:
+        new_list = []
+        for idx, item in enumerate(images_list):
+            if isinstance(item, str) and item:
+                new_url = await _process_single_url(f"images_list[{idx}]", item)
+                new_list.append(new_url if new_url else item)
+            else:
+                new_list.append(item)
+        refreshed["images_list"] = new_list
+        logger.info(
+            "[workflow] refreshed images_list: %d items", len(new_list)
+        )
 
     return refreshed
+
+
+async def _upload_local_to_cos(local_url: str) -> str | None:
+    """将本地 workflow runs 文件上传到 COS，返回公网 URL。"""
+    import re
+    from ..config import settings
+
+    m = re.search(r"/api/workflow/runs/([^/]+)/outputs/(.+)", local_url)
+    if not m:
+        return None
+
+    run_id, filename = m.group(1), m.group(2)
+    filepath = settings.workflow_runs_dir / run_id / "outputs" / filename
+    if not filepath.is_file():
+        logger.error("[workflow] local file not found: %s", filepath)
+        return None
+
+    data = filepath.read_bytes()
+
+    from spriteflow.api.deps import get_storage
+    from spriteflow.storage.base import StoragePrefix
+
+    storage = get_storage()
+    uri = await storage.upload(filename, data, prefix=StoragePrefix.AI_PROCESSED, content_type="image/png")
+
+    try:
+        url = await storage.get_presigned_url(uri)
+    except Exception:
+        url = uri
+
+    return url
 
 # 内存缓存：architect 结果（供轮询端点读取）
 # key = request_id, value = {nodes, edges, message, suggestions}
@@ -260,12 +355,15 @@ async def get_workflow_def_helper(db: AsyncSession, workflow_id: str) -> dict:
     """
     wf = await _get_workflow(db, workflow_id)
 
-    # 查询最近一次运行的 run_id（如果仍有节点在 running，前端需要恢复轮询）
+    # 查询最近一次全工作流运行的 run_id（如果仍有节点在 running，前端需要恢复轮询）
+    # 按节点数分组，优先返回节点数最多的运行（全工作流运行），
+    # 节点数相同时取最新的（避免单节点手动运行覆盖全工作流运行的结果）
     run_id = None
     result = await db.execute(
-        select(RunHistory.run_id)
+        select(RunHistory.run_id, sa_func.count(RunHistory.id).label("node_count"))
         .where(RunHistory.workflow_id == workflow_id)
-        .order_by(RunHistory.created_at.desc())
+        .group_by(RunHistory.run_id)
+        .order_by(sa_func.count(RunHistory.id).desc(), sa_func.max(RunHistory.created_at).desc())
         .limit(1)
     )
     row = result.first()
@@ -296,9 +394,14 @@ async def delete_workflow_def_by_id(db: AsyncSession, workflow_id: str) -> dict:
     """
     wf = await _get_workflow(db, workflow_id)
 
-    # 删除关联的运行历史
+    # 删除关联的运行历史（活跃表 + 归档表）
     await db.execute(
-        delete(RunHistory).where(RunHistory.workflow_id == workflow_id)
+        text("DELETE FROM workflow_run_history WHERE workflow_id = :wfid"),
+        {"wfid": workflow_id},
+    )
+    await db.execute(
+        text("DELETE FROM workflow_run_history_archive WHERE workflow_id = :wfid"),
+        {"wfid": workflow_id},
     )
     await db.delete(wf)
     await db.flush()
@@ -337,11 +440,40 @@ async def run_workflow_helper(db: AsyncSession, workflow_id: str, payload: dict)
     """
     POST /api/workflow/{id}/run
     准备工作流运行记录并立即返回 run_id，实际执行由 BackgroundTasks 异步完成
+
+    每次「全部运行」视为一次全新任务：
+    1. 将当前 RunHistory 中的旧记录移入 RunHistoryArchive 历史表
+    2. 清空 RunHistory 中该工作流的活跃记录
+    3. 创建全新的 run_id + 节点记录
     """
     wf = await _get_workflow(db, workflow_id)
-    run_id = gen_uuid()
 
-    # 创建工作流运行记录（初始状态 pending）
+    # ── 第一步：归档旧运行记录 ──
+    existing = await db.execute(
+        select(RunHistory).where(RunHistory.workflow_id == workflow_id)
+    )
+    existing_rows = existing.scalars().all()
+    for row in existing_rows:
+        archive = RunHistoryArchive(
+            id=gen_uuid(),
+            workflow_id=row.workflow_id,
+            node_id=row.node_id,
+            run_id=row.run_id,
+            node_run_id=row.node_run_id,
+            status=row.status,
+            node_data=row.node_data,
+            result=row.result,
+        )
+        db.add(archive)
+
+    # ── 第二步：清空活跃记录 ──
+    await db.execute(
+        text("DELETE FROM workflow_run_history WHERE workflow_id = :wfid"),
+        {"wfid": workflow_id},
+    )
+
+    # ── 第三步：创建全新运行记录 ──
+    run_id = gen_uuid()
     nodes_data = wf.data.get("nodes", []) if isinstance(wf.data, dict) else []
 
     for node in nodes_data:
@@ -352,39 +484,326 @@ async def run_workflow_helper(db: AsyncSession, workflow_id: str, payload: dict)
             node_id=node_id,
             run_id=run_id,
             node_run_id=gen_uuid(),
-            status="running",  # 初始即 running，前端轮询能立即看到运行态
+            status="pending",  # 初始为 pending，实际执行时由 execute_workflow_run 改为 running
             node_data=node,
         )
         db.add(node_run)
 
     await db.flush()
     await db.commit()  # 必须提交，否则后台任务会遇到 SQLite 数据库锁
-    return {"run_id": run_id, "nodes_data": nodes_data, "workflow_id": workflow_id}
+    edges = wf.edges or []
+    return {"run_id": run_id, "nodes_data": nodes_data, "workflow_id": workflow_id, "edges": edges}
+
+
+def _topological_sort(
+    nodes: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """根据 edges 对 nodes 做拓扑排序，保证上游节点先于下游节点执行
+
+    Args:
+        nodes: 节点数据列表，每个含 "id" 字段
+        edges: 边列表，每个含 "source" 和 "target" 字段
+
+    Returns:
+        拓扑排序后的节点列表；如果存在环，返回原顺序
+    """
+    if not edges:
+        return list(nodes)
+
+    node_map = {n["id"]: n for n in nodes}
+    node_ids = set(node_map.keys())
+
+    # 构建邻接表和入度
+    in_degree: dict[str, int] = {nid: 0 for nid in node_ids}
+    adj: dict[str, list[str]] = {nid: [] for nid in node_ids}
+
+    for edge in edges:
+        src = edge.get("source", "")
+        tgt = edge.get("target", "")
+        if src in node_ids and tgt in node_ids:
+            adj[src].append(tgt)
+            in_degree[tgt] = in_degree.get(tgt, 0) + 1
+
+    # Kahn 算法
+    from collections import deque
+    queue = deque(nid for nid, deg in in_degree.items() if deg == 0)
+    sorted_ids: list[str] = []
+
+    while queue:
+        nid = queue.popleft()
+        sorted_ids.append(nid)
+        for neighbor in adj.get(nid, []):
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    # 如果排序后数量不一致（有环），退回原顺序
+    if len(sorted_ids) != len(node_ids):
+        logger.warning(
+            "[workflow] cycle detected in edges, falling back to original node order"
+        )
+        return list(nodes)
+
+    # 未在 edges 中出现的孤立节点追加到末尾
+    remaining = node_ids - set(sorted_ids)
+    sorted_ids.extend(remaining)
+
+    return [node_map[nid] for nid in sorted_ids if nid in node_map]
+
+
+async def _save_outputs_to_local(
+    result: dict[str, Any],
+    run_id: str,
+    node_id: str,
+) -> dict[str, Any]:
+    """将工作流节点输出的图片保存到本地持久化目录。
+
+    支持两种输入格式：
+    1. 本地文件路径（组件 save_image_local 返回的 /tmp/... 路径）→ 直接复制
+    2. 远程 URL（COS / 外部 URL）→ HTTP 下载
+
+    每次全部运行触发后，以 run_id 创建独立目录存放此次生成的所有文件。
+
+    目录结构：
+        data/runs/{run_id}/
+        ├── outputs/           ← 各节点输出的图片
+        │   ├── {node_id}_0.png
+        │   ├── {node_id}_1.png
+        │   └── ...
+    """
+    outputs = result.get("outputs", [])
+    if not outputs:
+        return result
+
+    from ..config import settings
+    from ..components.utils import is_local_file_path
+
+    run_dir = settings.workflow_runs_dir / run_id / "outputs"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    modified = False
+    new_outputs: list[dict[str, Any]] = []
+
+    for idx, out in enumerate(outputs):
+        if out.get("type") == "image_url" and out.get("value"):
+            url = out["value"]
+            # 已经是本地服务 URL 则跳过
+            if "/api/workflow/runs/" in url:
+                new_outputs.append(out)
+                continue
+            try:
+                # 本地文件名：{node_id}_{index}.png
+                filename = f"{node_id}_{idx}.png"
+                filepath = run_dir / filename
+
+                # 判断是本地文件路径还是远程 URL
+                if is_local_file_path(url):
+                    # 本地文件路径（组件 save_image_local 返回）→ 直接复制
+                    import shutil
+                    shutil.copy2(url, filepath)
+                    image_data = filepath.read_bytes()
+                else:
+                    # 远程 URL → HTTP 下载
+                    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+                        resp = await client.get(url, follow_redirects=True)
+                        resp.raise_for_status()
+                        image_data = resp.content
+                    filepath.write_bytes(image_data)
+
+                # 本地持久化 HTTP URL（前端 + 下游节点均通过该 URL 加载图片）
+                local_url = f"{settings.local_base_url}/api/workflow/runs/{run_id}/outputs/{filename}"
+
+                # 读取图片尺寸
+                from PIL import Image
+                import io as pil_io
+                try:
+                    img = Image.open(pil_io.BytesIO(image_data))
+                    w, h = img.size
+                except Exception:
+                    w, h = out.get("width"), out.get("height")
+
+                new_outputs.append({
+                    "type": "image_url",
+                    "value": local_url,
+                    "width": w,
+                    "height": h,
+                })
+                modified = True
+                logger.info(
+                    "[workflow] saved locally: %s (%dx%d) node=%s",
+                    filename, w or 0, h or 0, node_id,
+                )
+            except Exception as e:
+                logger.error(
+                    "[workflow] failed to save local image (node=%s idx=%d): %s",
+                    node_id, idx, e,
+                )
+                new_outputs.append(out)  # 保留原输出，不阻塞流程
+        else:
+            new_outputs.append(out)
+
+    if modified:
+        result = {**result, "outputs": new_outputs}
+
+    return result
 
 
 async def execute_workflow_run(
     run_id: str,
     workflow_id: str,
     nodes_data: list[dict[str, Any]],
+    edges: list[dict[str, Any]] | None = None,
+    resume_from: str | None = None,
 ) -> None:
     """
     后台异步执行工作流所有节点。
 
-    使用独立的数据库会话，逐个执行节点并在每次执行前后更新 RunHistory 状态。
+    使用独立的数据库会话，按拓扑顺序逐个执行节点（上游先执行，
+    确保边引用能正确解析），每次执行前后更新 RunHistory 状态。
     前端通过 GET /api/workflow/run/{run_id}/status 轮询状态变化。
+
+    Args:
+        resume_from: 如果提供，则从该节点开始执行（恢复模式）。
+                     该节点之前的已成功节点跳过执行，但其输出从 DB 恢复到内存中
+                     供下游节点解析边引用。
     """
     from .database import async_session as _async_session
 
+    # 拓扑排序：确保上游节点先于下游节点执行
+    sorted_nodes = _topological_sort(nodes_data, edges or [])
+    if len(sorted_nodes) != len(nodes_data):
+        logger.warning(
+            "[workflow] topological sort mismatch: %d nodes → %d sorted, "
+            "falling back to original order",
+            len(nodes_data), len(sorted_nodes),
+        )
+        sorted_nodes = nodes_data
+
+    # 创建本次运行的本地持久化目录
+    from ..config import settings
+    run_output_dir = settings.workflow_runs_dir / run_id / "outputs"
+    run_output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("[workflow] run output dir: %s", run_output_dir)
+
     # 维护已执行节点的输出，用于解析下游节点的边缘引用
     node_outputs: dict[str, list[dict[str, Any]]] = {}
+    # 维护已执行节点的完整结果（含 meta），供下游读取 all_urls 等元数据
+    node_results: dict[str, dict[str, Any]] = {}
 
-    for node in nodes_data:
+    # ── 恢复模式：从 DB 加载已成功节点的输出 ──
+    if resume_from:
+        logger.info("[workflow] resume mode: starting from node=%s", resume_from)
+        # 从 DB 读取当前 run 中所有节点的状态和结果
+        async with _async_session() as resume_db:
+            rows = await resume_db.execute(
+                text(
+                    "SELECT node_id, status, result FROM workflow_run_history "
+                    "WHERE run_id = :run_id"
+                ),
+                {"run_id": run_id},
+            )
+            for row in rows.fetchall():
+                nid, nstatus, nresult = row
+                if nstatus == "succeeded" and nresult:
+                    try:
+                        rj = json.loads(nresult) if isinstance(nresult, str) else nresult
+                        outputs_list = rj.get("outputs", [])
+                        if outputs_list:
+                            node_outputs[nid] = outputs_list
+                        node_results[nid] = rj
+                    except Exception:
+                        pass
+
+        # 找到 resume_from 在拓扑排序中的位置，跳过之前的节点
+        resume_idx = None
+        for i, n in enumerate(sorted_nodes):
+            if n.get("id") == resume_from:
+                resume_idx = i
+                break
+
+        if resume_idx is not None:
+            # 将 resume_from 及其之后的非成功节点状态重置为 pending
+            # 已成功的节点保持 succeeded，避免恢复执行时状态被错误覆盖
+            nodes_to_reset = [
+                n.get("id", "") for n in sorted_nodes[resume_idx:]
+                if n.get("id", "") not in node_results
+            ]
+            if nodes_to_reset:
+                async with _async_session() as reset_db:
+                    placeholders = ",".join(f":id_{i}" for i in range(len(nodes_to_reset)))
+                    params = {f"id_{i}": nid for i, nid in enumerate(nodes_to_reset)}
+                    params["run_id"] = run_id
+                    await reset_db.execute(
+                        text(
+                            f"UPDATE workflow_run_history SET status='pending', updated_at=:now "
+                            f"WHERE run_id=:run_id AND node_id IN ({placeholders})"
+                        ),
+                        {**params, "now": datetime.now(timezone.utc)},
+                    )
+                    await reset_db.commit()
+            logger.info(
+                "[workflow] resume: restored %d succeeded nodes, will re-run from %s",
+                len(node_results), resume_from,
+            )
+        else:
+            logger.warning("[workflow] resume_from node %s not found in sorted nodes", resume_from)
+
+    for node in sorted_nodes:
         node_id = node.get("id", "")
         result: dict[str, Any] | None = None
-        status = "running"
+
+        # ── 恢复模式：跳过已成功的节点 ──
+        if resume_from and node_id in node_results and not node_results[node_id].get("_failed"):
+            logger.info("[workflow] resume: skipping succeeded node=%s", node_id)
+            continue
+
+        # 检查上游节点是否全部成功，若有失败则跳过当前节点
+        upstream_ids = node.get("inputs", []) or []
+        failed_upstream = [
+            uid for uid in upstream_ids
+            if uid in node_results and node_results[uid].get("_failed")
+        ]
+        if failed_upstream:
+            result = {"outputs": [{"type": "text", "value": f"上游节点失败，已跳过: {', '.join(failed_upstream)}"}]}
+            status = "skipped"
+            logger.warning("[workflow] node=%s skipped due to failed upstream: %s", node_id, failed_upstream)
+            # 直接写入 DB 并 continue
+            async with _async_session() as bg_db:
+                now_ts = datetime.now(timezone.utc)
+                await bg_db.execute(
+                    text(
+                        "UPDATE workflow_run_history "
+                        "SET status = :status, result = :result, updated_at = :updated_at "
+                        "WHERE run_id = :run_id AND node_id = :node_id"
+                    ),
+                    {
+                        "status": status,
+                        "result": json.dumps(result, ensure_ascii=False),
+                        "updated_at": now_ts,
+                        "run_id": run_id,
+                        "node_id": node_id,
+                    },
+                )
+                await bg_db.commit()
+            node_results[node_id] = {**result, "_failed": True}
+            continue
 
         async with _async_session() as bg_db:
+            status = "succeeded"  # 默认成功，后续按实际结果覆盖
             try:
+                # 将当前节点状态从 pending 改为 running（视觉上标识正在执行）
+                now_ts = datetime.now(timezone.utc)
+                await bg_db.execute(
+                    text(
+                        "UPDATE workflow_run_history "
+                        "SET status = :status, updated_at = :updated_at "
+                        "WHERE run_id = :run_id AND node_id = :node_id"
+                    ),
+                    {"status": "running", "updated_at": now_ts, "run_id": run_id, "node_id": node_id},
+                )
+                await bg_db.commit()
+
                 model_id = node.get("model", "")
                 category = node.get("category", "")
                 form_values = node.get("formValues", {})
@@ -399,6 +818,112 @@ async def execute_workflow_run(
                 # input_params 至少要有基础数据
                 if not input_params:
                     input_params = dict(input_params_raw)
+
+                # 从上游节点 meta 注入 all_urls（供 ImageInput 的 image_index 使用）
+                params_field = node.get("params", {}) or {}
+                for ref_key, ref_val in params_field.items():
+                    if isinstance(ref_val, str):
+                        m = _TEMPLATE_REF_RE.match(ref_val)
+                        if m:
+                            upstream_id = m.group(1)
+                            upstream_result = node_results.get(upstream_id, {})
+                            upstream_meta = upstream_result.get("meta", {}) or {}
+                            all_urls = upstream_meta.get("all_urls")
+                            if all_urls:
+                                input_params["all_urls"] = all_urls
+                                # 同时按 image_index 设置正确的 image_url（边解析只传了 outputs[0]）
+                                img_idx_raw = input_params.get("image_index") if input_params.get("image_index") is not None else input_params_raw.get("image_index")
+                                if img_idx_raw is not None:
+                                    try:
+                                        img_idx = int(img_idx_raw)
+                                    except (ValueError, TypeError):
+                                        img_idx = 0
+                                    urls = all_urls.split(",")
+                                    if 0 <= img_idx < len(urls):
+                                        input_params["image_url"] = urls[img_idx]
+                                        # 同步写回 node.input_params，确保前端表单显示正确的 URL
+                                        node_input_params = node.get("input_params", None)
+                                        if isinstance(node_input_params, dict):
+                                            node_input_params["image_url"] = urls[img_idx]
+                                            node["input_params"] = node_input_params
+                                logger.info(
+                                    "[workflow] injected all_urls+image_url from %s into %s (len=%d, index=%s)",
+                                    upstream_id, node_id, len(all_urls), img_idx_raw,
+                                )
+
+                # ── 收集所有上游节点的全部图片输出到 images_list ──
+                # 对于 image-grid-merge 等需要接收多个上游图片批次的节点，
+                # 遍历所有连接到 imageInput2（images_list handle）的边，
+                # 收集每个上游节点的全部输出（而非仅 outputs[0]）。
+                node_id_str = node.get("id", "")
+                # 检查节点 schema 是否包含 images_list 字段
+                node_form_values = node.get("formValues", {}) or {}
+                has_images_list_field = "images_list" in (node.get("input_params", {}) or {}) or \
+                                        "images_list" in node_form_values or \
+                                        any(
+                                            (node.get("model", "") == comp_id or node.get("category", "") == comp_id)
+                                            for comp_id in ("image-grid-merge",)
+                                        )
+                if has_images_list_field or "images_list" in input_params:
+                    all_upstream_images: list[str] = []
+                    for edge in (edges or []):
+                        if edge.get("target") != node_id_str:
+                            continue
+                        target_handle = edge.get("targetHandle", "")
+                        # imageInput2 = images_list handle (green, multi-input)
+                        if target_handle != "imageInput2":
+                            continue
+                        source_id = edge.get("source", "")
+                        source_outputs = node_outputs.get(source_id, [])
+                        for out in source_outputs:
+                            val = out.get("value")
+                            if val and isinstance(val, str) and val.strip():
+                                if val not in all_upstream_images:
+                                    all_upstream_images.append(val)
+
+                    if all_upstream_images:
+                        input_params["images_list"] = all_upstream_images
+                        logger.info(
+                            "[workflow] collected %d upstream images into images_list for node=%s",
+                            len(all_upstream_images), node_id_str,
+                        )
+
+                # ── 基于 handle 的边注入 ──
+                # 当 params 中没有模板引用时，通过边的 targetHandle → input_param_key
+                # 映射直接从上游节点输出注入值。
+                # 这解决了前端未设置模板引用时，边连接的数据无法传递的问题。
+                HANDLE_TO_PARAM: dict[str, str] = {
+                    "imageInput3": "image_url",    # 图片输入 → image_url
+                    "imageInput4": "video_url",    # 视频输入 → video_url
+                    "videoInput":  "prompt",       # 文本输入到视频节点 → prompt
+                    "videoInput2": "image_url",    # 图片输入到视频节点 → image_url
+                    "audioInput":  "prompt",       # 文本输入到音频节点 → prompt
+                    "audioInput2": "audio_url",    # 音频输入 → audio_url
+                    "textInput":   "prompt",       # 文本输入 → prompt
+                }
+                for edge in (edges or []):
+                    if edge.get("target") != node_id_str:
+                        continue
+                    target_handle = edge.get("targetHandle", "")
+                    param_key = HANDLE_TO_PARAM.get(target_handle)
+                    if not param_key:
+                        continue
+                    # 如果 input_params 已有非空值，跳过（用户手动填写优先）
+                    current_val = input_params.get(param_key)
+                    if current_val and isinstance(current_val, str) and current_val.strip():
+                        continue
+                    # 从上游节点输出注入
+                    source_id = edge.get("source", "")
+                    source_outputs = node_outputs.get(source_id, [])
+                    if source_outputs:
+                        val = source_outputs[0].get("value")
+                        if val and isinstance(val, str) and val.strip():
+                            input_params[param_key] = val
+                            logger.info(
+                                "[workflow] edge-injected %s from %s[%s]→%s[%s] for node=%s",
+                                param_key, source_id, edge.get("sourceHandle", ""),
+                                node_id_str, target_handle, node_id_str,
+                            )
 
                 logger.info(
                     "[workflow] executing node=%s model=%s input_keys=%s",
@@ -452,7 +977,7 @@ async def execute_workflow_run(
                                 # 优先使用组件管理页配置的凭据，缺失回退到 .env
                                 component_credentials = ComponentRegistry.get_credentials(model_id)
                                 # 刷新 COS 预签名 URL（避免下游 API 无法下载参考图）
-                                resolved_params = _refresh_cos_urls(input_params)
+                                resolved_params = await _refresh_cos_urls(input_params)
                                 result = await component.execute(inputs=resolved_params, params=resolved_params, credentials=component_credentials)
                                 status = "succeeded"
                                 logger.info(f"Custom component {model_id} executed in workflow run")
@@ -464,40 +989,240 @@ async def execute_workflow_run(
                             result = {"outputs": [{"type": "text", "value": f"Model '{model_id}' not configured locally. Configure AI provider in .env."}]}
                             status = "failed"
 
+                # 存储节点输出，供下游节点解析边缘引用
+                if result and isinstance(result, dict):
+                    outputs_list = result.get("outputs", [])
+                    if outputs_list:
+                        node_outputs[node_id] = outputs_list
+                    node_results[node_id] = {**result, "_failed": status == "failed"}
+
+                # 将成功节点的图片输出保存到本地持久化目录
+                if status == "succeeded" and result and isinstance(result, dict):
+                    try:
+                        result = await _save_outputs_to_local(
+                            result=result,
+                            run_id=run_id,
+                            node_id=node_id,
+                        )
+                        # 更新内存中的引用，供后续节点和 DB 写入使用
+                        outputs_list = result.get("outputs", [])
+                        if outputs_list:
+                            node_outputs[node_id] = outputs_list
+                        node_results[node_id] = result
+                    except Exception as e:
+                        logger.error(
+                            "[workflow] local save error for node %s: %s", node_id, e
+                        )
+
+                # 更新运行记录（含修正后的 node_data，前端表单能看到正确的 image_url）
+                # 使用原生 SQL 避免 AsyncSession + update(ORMEntity) 的 rowcount 检查问题
+                now_ts = datetime.now(timezone.utc)
+                await bg_db.execute(
+                    text(
+                        "UPDATE workflow_run_history "
+                        "SET status = :status, result = :result, node_data = :node_data, updated_at = :updated_at "
+                        "WHERE run_id = :run_id AND node_id = :node_id"
+                    ),
+                    {
+                        "status": status,
+                        "result": json.dumps(result, ensure_ascii=False) if result is not None else None,
+                        "node_data": json.dumps(node, ensure_ascii=False) if node is not None else None,
+                        "updated_at": now_ts,
+                        "run_id": run_id,
+                        "node_id": node_id,
+                    },
+                )
+                await bg_db.commit()
+
             except Exception as e:
                 logger.error(f"Error running node {node_id}: {e}")
                 result = {"outputs": [{"type": "text", "value": f"Error: {str(e)}"}]}
                 status = "failed"
-
-            # 存储节点输出，供下游节点解析边缘引用
-            if result and isinstance(result, dict):
-                outputs_list = result.get("outputs", [])
-                if outputs_list:
-                    node_outputs[node_id] = outputs_list
-
-            # 更新运行记录
-            await bg_db.execute(
-                update(RunHistory)
-                .where(RunHistory.run_id == run_id, RunHistory.node_id == node_id)
-                .values(status=status, result=result, updated_at=datetime.now(timezone.utc))
-            )
-            await bg_db.commit()
+                # 内存中存储错误结果，供下游节点感知该节点失败
+                node_results[node_id] = {**result, "_failed": True}
 
     logger.info("[workflow] run_id=%s all nodes executed", run_id)
+
+
+async def resume_workflow_helper(db: AsyncSession, workflow_id: str) -> dict:
+    """
+    准备从失败节点恢复执行。
+
+    1. 查找当前活跃 run_id
+    2. 查找第一个 failed/pending 节点作为 resume 起点
+    3. 返回 run_id, resume_from, nodes_data, edges 供后台执行
+    """
+    wf = await _get_workflow(db, workflow_id)
+
+    # 查找当前活跃 run
+    result = await db.execute(
+        select(RunHistory.run_id)
+        .where(RunHistory.workflow_id == workflow_id)
+        .limit(1)
+    )
+    active_run = result.first()
+    if not active_run:
+        raise HTTPException(status_code=400, detail="没有活跃的运行记录，请先全部运行")
+    run_id = active_run[0]
+
+    # 查询所有节点状态，按拓扑顺序找出第一个需要重新执行的节点
+    rows = await db.execute(
+        select(RunHistory.node_id, RunHistory.status)
+        .where(RunHistory.run_id == run_id)
+    )
+    node_statuses: dict[str, str] = {}
+    for row in rows.fetchall():
+        nid, nstatus = row
+        node_statuses[nid] = nstatus or "pending"
+
+    nodes_data = wf.data.get("nodes", []) if isinstance(wf.data, dict) else []
+    edges = wf.edges or []
+    sorted_nodes = _topological_sort(nodes_data, edges)
+
+    # 找第一个非 succeeded 的节点
+    resume_from: str | None = None
+    for node in sorted_nodes:
+        nid = node.get("id", "")
+        status = node_statuses.get(nid, "pending")
+        if status != "succeeded":
+            resume_from = nid
+            break
+
+    if not resume_from:
+        # 所有节点都已成功，无需恢复
+        raise HTTPException(status_code=400, detail="所有节点均已成功，无需恢复")
+
+    logger.info(
+        "[workflow] resume: run_id=%s, resume_from=%s, failed/pending nodes: %s",
+        run_id, resume_from,
+        [nid for nid, s in node_statuses.items() if s != "succeeded"],
+    )
+
+    return {
+        "run_id": run_id,
+        "resume_from": resume_from,
+        "nodes_data": nodes_data,
+        "workflow_id": workflow_id,
+        "edges": edges,
+    }
 
 
 async def run_node_helper(db: AsyncSession, workflow_id: str, node_id: str, payload: dict) -> dict:
     """
     POST /api/workflow/{id}/node/{nid}/run
     运行单个节点
+
+    设计：单节点运行始终复用当前活跃 run_id，在该 run 内 upsert 该节点的记录。
+    如果该工作流还没有活跃 run（全新工作流），则自动创建一个。
+    不管单节点运行多少次，始终在同一 run 内更新，不产生新的 run_id。
+    只有点击「全部运行」才会归档旧记录并创建全新 run。
     """
     _ = await _get_workflow(db, workflow_id)
+
+    # ── 查找当前活跃 run_id，没有则创建 ──
+    result = await db.execute(
+        select(RunHistory.run_id)
+        .where(RunHistory.workflow_id == workflow_id)
+        .limit(1)
+    )
+    active_run = result.first()
+    run_id = active_run[0] if active_run else gen_uuid()
+
+    # ── 删除该节点在此 run 中的旧记录（upsert 语义） ──
+    await db.execute(
+        text("DELETE FROM workflow_run_history WHERE run_id = :run_id AND node_id = :node_id"),
+        {"run_id": run_id, "node_id": node_id},
+    )
+
     node_run_id = gen_uuid()
-    run_id = gen_uuid()
 
     model_id = payload.get("model", "")
-    input_params = payload.get("input_params", payload.get("params", {}))
+    input_params = dict(payload.get("input_params", payload.get("params", {})) or {})
     category = payload.get("category", "")
+
+    # ── 边注入：从上游节点输出补充缺失的参数 ──
+    # 单节点运行时，前端传来的 input_params 可能缺少上游连线的数据
+    # （如 video_url 为 null）。通过 edges + DB 查找上游节点输出并注入。
+    HANDLE_TO_PARAM: dict[str, str] = {
+        "imageInput3": "image_url",
+        "imageInput4": "video_url",
+        "videoInput":  "prompt",
+        "videoInput2": "image_url",
+        "videoInput4": "video_url",
+        "audioInput":  "prompt",
+        "audioInput2": "audio_url",
+        "textInput":   "prompt",
+    }
+    try:
+        wf = await _get_workflow(db, workflow_id)
+        wf_edges = wf.edges or []
+        # 查找当前 run 中所有节点的最新输出
+        edge_rows = await db.execute(
+            text(
+                "SELECT node_id, result FROM workflow_run_history "
+                "WHERE run_id = :run_id AND status = 'succeeded'"
+            ),
+            {"run_id": run_id},
+        )
+        upstream_outputs: dict[str, list[dict]] = {}
+        for erow in edge_rows.fetchall():
+            src_nid, src_result = erow
+            if src_result:
+                rj = json.loads(src_result) if isinstance(src_result, str) else src_result
+                outs = rj.get("outputs", []) if isinstance(rj, dict) else []
+                if outs:
+                    upstream_outputs[src_nid] = outs
+
+        injected_keys: list[str] = []
+        for edge in wf_edges:
+            if edge.get("target") != node_id:
+                continue
+            target_handle = edge.get("targetHandle", "")
+            param_key = HANDLE_TO_PARAM.get(target_handle)
+            if not param_key:
+                continue
+            # 如果已有非空值，跳过
+            current_val = input_params.get(param_key)
+            if current_val and isinstance(current_val, str) and current_val.strip():
+                continue
+            source_id = edge.get("source", "")
+            src_outs = upstream_outputs.get(source_id, [])
+            if src_outs:
+                val = src_outs[0].get("value")
+                if val and isinstance(val, str) and val.strip():
+                    input_params[param_key] = val
+                    injected_keys.append(param_key)
+                    logger.info(
+                        "[run_node] edge-injected %s from %s→%s for node=%s",
+                        param_key, source_id, node_id, node_id,
+                    )
+        if injected_keys:
+            logger.info("[run_node] node=%s injected params from edges: %s", node_id, injected_keys)
+
+        # ── 收集 images_list：从所有连接到 imageInput2 的上游节点收集全部输出 ──
+        if "images_list" in input_params or model_id in ("image-grid-merge",):
+            all_upstream_images: list[str] = []
+            for edge in wf_edges:
+                if edge.get("target") != node_id:
+                    continue
+                target_handle = edge.get("targetHandle", "")
+                if target_handle != "imageInput2":
+                    continue
+                source_id = edge.get("source", "")
+                src_outs = upstream_outputs.get(source_id, [])
+                for out in src_outs:
+                    val = out.get("value")
+                    if val and isinstance(val, str) and val.strip():
+                        if val not in all_upstream_images:
+                            all_upstream_images.append(val)
+            if all_upstream_images:
+                input_params["images_list"] = all_upstream_images
+                logger.info(
+                    "[run_node] collected %d upstream images into images_list for node=%s",
+                    len(all_upstream_images), node_id,
+                )
+    except Exception as edge_err:
+        logger.warning("[run_node] edge injection failed for node=%s: %s", node_id, edge_err)
 
     # 创建运行记录
     node_run = RunHistory(
@@ -570,43 +1295,49 @@ async def run_node_helper(db: AsyncSession, workflow_id: str, node_id: str, payl
         await db.flush()
         return {"run_id": run_id, "node_run_id": node_run_id}
 
+    # ── 先提交初始记录（释放写锁，避免 AI 生成期间阻塞其他请求）──
+    # 捕获 node_run_id 和记录主键，commit 后 ORM 对象会 expire，不再直接操作
+    _row_id = node_run.id
+    await db.commit()
+    # 显式 expunge，避免后续设置属性时 SQLAlchemy 尝试 ORM flush 导致 "0 rows matched"
+    db.expunge(node_run)
+
+    # 用局部变量跟踪执行结果，不再操作 ORM 对象
+    _final_status = "succeeded"
+    _final_result: dict[str, Any] | None = None
+
     try:
         service = get_service(model_id)
         if service:
             result = await service.generate(input_params, model=model_id)
-            node_run.status = "succeeded"
-            node_run.result = result
+            _final_status = "succeeded"
+            _final_result = result
         else:
             # 尝试从 ComponentRegistry 查找自定义组件
             component = ComponentRegistry.get(model_id)
             if component:
                 try:
-                    # 优先使用组件管理页配置的凭据，缺失回退到 .env
                     component_credentials = ComponentRegistry.get_credentials(model_id)
-                    # 刷新 COS 预签名 URL（避免下游 API 无法下载参考图）
-                    resolved_params = _refresh_cos_urls(input_params)
-                    # 自定义组件的 execute(inputs, params, credentials)
-                    # input_params 包含所有参数，组件自己区分 inputs/params
+                    resolved_params = await _refresh_cos_urls(input_params)
                     result = await component.execute(
                         inputs=resolved_params,
                         params=resolved_params,
                         credentials=component_credentials,
                     )
-                    node_run.status = "succeeded"
-                    node_run.result = result
+                    _final_status = "succeeded"
+                    _final_result = result
                     logger.info(f"Custom component {model_id} executed successfully")
                 except Exception as comp_err:
-                    node_run.status = "failed"
-                    node_run.result = {
+                    _final_status = "failed"
+                    _final_result = {
                         "outputs": [
                             {"type": "text", "value": f"组件执行失败: {str(comp_err)}"}
                         ]
                     }
                     logger.error(f"Custom component {model_id} failed: {comp_err}")
             else:
-                # 未配置的服务 → 返回友好提示
-                node_run.status = "failed"
-                node_run.result = {
+                _final_status = "failed"
+                _final_result = {
                     "outputs": [
                         {
                             "type": "text",
@@ -620,13 +1351,48 @@ async def run_node_helper(db: AsyncSession, workflow_id: str, node_id: str, payl
         raise
     except Exception as e:
         logger.error(f"Node run error for {model_id}: {e}")
-        node_run.status = "failed"
-        node_run.result = {
+        _final_status = "failed"
+        _final_result = {
             "outputs": [{"type": "text", "value": f"运行失败: {str(e)}"}]
         }
 
-    node_run.updated_at = datetime.now(timezone.utc)
-    await db.flush()
+    # ── 将成功节点的图片输出保存到本地持久化目录 ──
+    # 单节点运行也需要持久化，否则前端无法通过 /api/workflow/runs/... 加载图片
+    if _final_status == "succeeded" and _final_result and isinstance(_final_result, dict):
+        try:
+            _final_result = await _save_outputs_to_local(
+                result=_final_result,
+                run_id=run_id,
+                node_id=node_id,
+            )
+        except Exception as save_err:
+            logger.error(
+                "[run_node_helper] local save error for node %s: %s", node_id, save_err
+            )
+
+    # 使用原生 SQL UPDATE 写入结果（不依赖 ORM 对象）
+    _now_ts = datetime.now(timezone.utc)
+    try:
+        await db.execute(
+            text(
+                "UPDATE workflow_run_history "
+                "SET status = :status, result = :result, updated_at = :updated_at "
+                "WHERE id = :id"
+            ),
+            {
+                "status": _final_status,
+                "result": json.dumps(_final_result, ensure_ascii=False) if _final_result is not None else None,
+                "updated_at": _now_ts,
+                "id": _row_id,
+            },
+        )
+        await db.commit()
+    except Exception as update_err:
+        logger.error(
+            "[run_node_helper] UPDATE failed for node=%s id=%s: %s\n%s",
+            node_id, _row_id, update_err, traceback.format_exc(),
+        )
+        raise
     return {"run_id": run_id, "node_run_id": node_run_id}
 
 
@@ -662,7 +1428,8 @@ async def delete_node_run_by_id_helper(db: AsyncSession, node_run_id: str) -> di
     删除节点运行历史
     """
     await db.execute(
-        delete(RunHistory).where(RunHistory.node_run_id == node_run_id)
+        text("DELETE FROM workflow_run_history WHERE node_run_id = :nrid"),
+        {"nrid": node_run_id},
     )
     await db.flush()
     return {"detail": "Node run deleted"}
@@ -991,6 +1758,16 @@ async def cloudfront_signed_url_helper(payload: dict) -> dict:
         signed_url = f"{settings.static_url_prefix}/{filename}"
 
     return {"signed_url": signed_url or file_url}
+
+
+async def proxy_download_stream(url: str, filename: str = "download"):
+    """后端代理下载：服务端拉取文件并返回异步生成器，绕过浏览器 CORS 限制"""
+    import httpx
+    async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
+        async with client.stream("GET", url) as resp:
+            resp.raise_for_status()
+            async for chunk in resp.aiter_bytes(chunk_size=65536):
+                yield chunk
 
 
 async def generate_thumbnail_helper(db: AsyncSession, workflow_id: str, payload: dict) -> dict:

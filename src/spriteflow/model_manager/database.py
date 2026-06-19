@@ -1,6 +1,7 @@
 """模型管理模块专用数据库引擎"""
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy import event
 from ..config import settings
 
 DATABASE_URL = "sqlite+aiosqlite:///data/model_manager.db"
@@ -8,8 +9,17 @@ DATABASE_URL = "sqlite+aiosqlite:///data/model_manager.db"
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
-    connect_args={"check_same_thread": False},
+    connect_args={"check_same_thread": False, "timeout": 30},
 )
+
+# 为 SQLite 连接启用 WAL 模式 + 忙等待超时，避免并发写入时 database is locked
+@event.listens_for(engine.sync_engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=10000")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.close()
 
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

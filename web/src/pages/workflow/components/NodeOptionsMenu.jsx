@@ -66,6 +66,7 @@ const NodeOptionsMenu = ({
               suppressHydrationWarning={true}
               onClick={(e) => {
                 e.stopPropagation();
+                // downloadFile 会自动从 URL 提取扩展名
                 downloadFile(downloadUrl, `${nodeId}_output`);
                 setIsOpen(false);
               }}

@@ -13,10 +13,10 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
 ### Key Capabilities
 
 - **AI Generation** — Text-to-Image, Image-to-Image, Multi-Image Fusion, Sequential Frame Generation
-- **AI Workflow** — Visual node editor with presets, real-time execution, text/image/video/audio nodes
+- **AI Workflow** — Visual node editor with presets, real-time execution, resume-from-failed, text/image/video/audio nodes
 - **Model Manager** — Multi-provider model registry with channels, routing, and cost tracking
 - **Character Pipeline** — Master template → direction variants → animation sprites → sprite sheets
-- **Image Processing** — Background removal, sprite alignment, sprite sheet packing, video frame extraction
+- **Image Processing** — Background removal, sprite alignment, sprite sheet packing, video frame extraction with key frame selection (cycle detection / uniform / diversity), image grid merge
 - **Video Generation** — Text-to-Video and Image-to-Video via Seedance
 - **Asset Management** — Upload, organize, tag, group, favorite, lineage tracking
 - **Visual Graph Editor** — Drag-and-drop pipeline composition with React Flow
@@ -344,8 +344,9 @@ SpriteFlow/
 | **SequentialImages** | Generate | Generate coherent image sequences |
 | **RemoveBG** | Process | AI background removal |
 | **SpriteAlign** | Process | Detect → Crop → Scale → Align |
-| **ExtractFrames** | Process | Extract frames from video |
+| **ExtractFrames** | Process | Extract frames from video with key frame selection (cycle detection / uniform / diversity) |
 | **PackSpritesheet** | Process | Pack frames into sprite sheet |
+| **GridMerge** | Process | Merge multiple images into a configurable grid (columns × rows) |
 | **SaveAsset** | Output | Save images to library |
 
 ### Pipeline Nodes
@@ -362,8 +363,10 @@ SpriteFlow/
 | Component | Description |
 |-----------|-------------|
 | **SeedanceProFast** | Seedance 1.0 Pro Fast video generation with custom parameter presets, credential management, and test/validate API |
+| **VideoFrameExtract** | Extract frames from video with key frame selection (cycle detection, uniform, diversity sampling) |
+| **ImageGridMerge** | Merge multiple images into a grid layout with configurable columns, rows, and spacing |
 
-Custom components are self-contained plugins with independent schemas, credentials, and execution logic. They integrate into the workflow engine via [ComponentRegistry](src/spriteflow/components/registry.py) and can be managed through the [ComponentsPage](web/src/pages/components/ComponentsPage.tsx) UI.
+Custom components are self-contained plugins with independent schemas, credentials, and execution logic. They integrate into the workflow engine via [ComponentRegistry](src/spriteflow/components/registry.py) and can be managed through the [ComponentsPage](web/src/pages/components/ComponentsPage.tsx) UI. Single-node execution automatically resolves upstream outputs via handle-to-parameter edge injection.
 
 ---
 

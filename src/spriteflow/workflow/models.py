@@ -32,7 +32,24 @@ class Workflow(Base):
 
 
 class RunHistory(Base):
+    """活跃的运行记录 —— 每个工作流最多保留一份（最近一次全部运行/单节点运行结果）"""
     __tablename__ = "workflow_run_history"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    workflow_id = Column(String(36), default="")
+    node_id = Column(String(100), default="")
+    run_id = Column(String(36), default=gen_uuid, index=True)
+    node_run_id = Column(String(36), default=gen_uuid)
+    status = Column(String(50), default="pending")
+    node_data = Column(JSON, nullable=True)
+    result = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class RunHistoryArchive(Base):
+    """历史运行记录 —— 每次点击「全部运行」时，旧记录移入此表"""
+    __tablename__ = "workflow_run_history_archive"
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
     workflow_id = Column(String(36), default="")

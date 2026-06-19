@@ -23,6 +23,8 @@ class AppSettings(BaseSettings):
     project_root: Path = Path(__file__).resolve().parent.parent.parent
     database_path: Path = Path("data/assets.db")
     cache_dir: Path = Path(".cache")
+    workflow_runs_dir: Path = Path("data/runs")  # 工作流运行本地输出目录
+    local_base_url: str = "http://127.0.0.1:8000"  # 本地服务地址（供组件内部互访）
 
     # 路由配置
     routing_config: Path = project_root / "config" / "routing.yaml"
@@ -73,6 +75,7 @@ class AppSettings(BaseSettings):
         """确保必要目录存在"""
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.workflow_runs_dir.mkdir(parents=True, exist_ok=True)
 
 
 settings = AppSettings()

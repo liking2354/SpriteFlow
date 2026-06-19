@@ -1,5 +1,8 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Depends
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from pathlib import Path
+from ...config import settings
 from ..database import get_db
 from ..workflow_helper import (
     create_or_update_workflow,
@@ -13,6 +16,7 @@ from ..workflow_helper import (
     publish_workflow_helper,
     template_workflow_helper,
     cloudfront_signed_url_helper,
+    proxy_download_stream,
     generate_thumbnail_helper,
     get_workflow_defs_helper,
     delete_workflow_def_by_id,
@@ -24,6 +28,7 @@ from ..workflow_helper import (
     update_workflow_category_helper,
     get_workflow_api_inputs_helper,
     execute_workflow_via_api_helper,
+    resume_workflow_helper,
     get_workflow_api_outputs_helper,
     seed_workflow_presets,
     get_workflow_presets,
@@ -147,9 +152,33 @@ async def run_workflow(
         prep_result = await run_workflow_helper(db, workflow_id, payload)
         run_id = prep_result["run_id"]
         nodes_data = prep_result.get("nodes_data", [])
+        edges = prep_result.get("edges", [])
         # 后台异步执行节点，立即返回 run_id 供前端轮询
-        background_tasks.add_task(execute_workflow_run, run_id, workflow_id, nodes_data)
+        background_tasks.add_task(execute_workflow_run, run_id, workflow_id, nodes_data, edges)
         return {"run_id": run_id}
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{workflow_id}/resume")
+async def resume_workflow(
+    workflow_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """从失败/待执行节点恢复执行工作流，跳过已成功的节点。"""
+    try:
+        prep_result = await resume_workflow_helper(db, workflow_id)
+        run_id = prep_result["run_id"]
+        resume_from = prep_result["resume_from"]
+        nodes_data = prep_result.get("nodes_data", [])
+        edges = prep_result.get("edges", [])
+        background_tasks.add_task(
+            execute_workflow_run, run_id, workflow_id, nodes_data, edges, resume_from
+        )
+        return {"run_id": run_id, "resume_from": resume_from}
     except Exception as e:
         if isinstance(e, HTTPException):
             raise e
@@ -264,6 +293,29 @@ async def cloudfront_signed_url(request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/proxy-download")
+async def proxy_download(
+    url: str = Query(..., description="要下载的文件 URL"),
+    filename: str = Query("download", description="下载文件名"),
+):
+    """后端代理下载：绕开浏览器 CORS 限制"""
+    try:
+        from urllib.parse import quote
+        encoded_filename = quote(filename, safe="")
+        return StreamingResponse(
+            proxy_download_stream(url, filename),
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+                "Cache-Control": "no-cache",
+            },
+        )
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/{workflow_id}/thumbnail")
 async def generate_thumbnail(
     workflow_id: str, request: Request, db: AsyncSession = Depends(get_db)
@@ -312,6 +364,22 @@ async def get_workflow_api_outputs(
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ===========================================================================
+# 本地运行输出文件服务（工作流图片的本地持久化访问）
+# ===========================================================================
+
+@router.get("/runs/{run_id}/outputs/{filename:path}")
+async def serve_run_output(run_id: str, filename: str):
+    """提供工作流运行输出的本地文件（图片等）。
+
+    文件路径：data/runs/{run_id}/outputs/{filename}
+    """
+    file_path = settings.workflow_runs_dir / run_id / "outputs" / filename
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail=f"文件不存在: {filename}")
+    return FileResponse(str(file_path))
 
 
 # ===========================================================================
