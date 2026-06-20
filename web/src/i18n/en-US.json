@@ -888,7 +888,8 @@
     "noPresets": "No preset templates available",
     "startFresh": "Start from scratch",
     "usePreset": "Click to use this template",
-    "use": "Use"
+    "use": "Use",
+    "duplicate": "Duplicate"
   },
   "navbar": {
     "inputs": "Inputs",

@@ -7,6 +7,8 @@
 - 仅当需要调用外部 AI API 时，_refresh_cos_urls 才上传本地文件到 COS
 
 这样消除了"组件上传 COS → 框架从 COS 下载回来"的冗余往返。
+
+临时目录通过 COMPONENTS_TEMP_DIR 环境变量配置，默认为 .cache/components_temp。
 """
 
 from __future__ import annotations
@@ -16,7 +18,6 @@ import io
 import logging
 import os
 import re
-import tempfile
 from pathlib import Path
 
 import httpx
@@ -24,9 +25,14 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-# 临时目录：组件生成的图片先存这里，框架再复制到 run 输出目录
-_TEMP_DIR = Path(tempfile.gettempdir()) / "spriteflow_components"
-_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+def _get_temp_dir() -> Path:
+    """获取组件临时输出目录（惰性初始化，从 settings 读取可配置路径）"""
+    from spriteflow.config import settings
+
+    d = settings.components_temp_dir
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def is_local_file_path(value: str) -> bool:
@@ -58,7 +64,7 @@ async def save_image_local(image: Image.Image, filename_prefix: str = "output") 
         filename_prefix: 文件名前缀
 
     Returns:
-        本地文件绝对路径，如 /tmp/spriteflow_components/output_abc123.png
+        本地文件绝对路径，如 {components_temp_dir}/output_abc123.png
     """
     buf = io.BytesIO()
     image.save(buf, format="PNG")
@@ -66,7 +72,7 @@ async def save_image_local(image: Image.Image, filename_prefix: str = "output") 
 
     content_hash = hashlib.sha256(data).hexdigest()[:32]
     filename = f"{filename_prefix}_{content_hash}.png"
-    filepath = _TEMP_DIR / filename
+    filepath = _get_temp_dir() / filename
     filepath.write_bytes(data)
 
     logger.info("[component_utils] saved locally: %s (%dx%d, %d bytes)",

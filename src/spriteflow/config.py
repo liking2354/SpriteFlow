@@ -24,6 +24,7 @@ class AppSettings(BaseSettings):
     database_path: Path = Path("data/assets.db")
     cache_dir: Path = Path(".cache")
     workflow_runs_dir: Path = Path("data/runs")  # 工作流运行本地输出目录
+    components_temp_dir: Path = Path(".cache/components_temp")  # 组件临时输出目录（save_image_local）
     local_base_url: str = "http://127.0.0.1:8000"  # 本地服务地址（供组件内部互访）
 
     # 路由配置
@@ -76,6 +77,7 @@ class AppSettings(BaseSettings):
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.workflow_runs_dir.mkdir(parents=True, exist_ok=True)
+        self.components_temp_dir.mkdir(parents=True, exist_ok=True)
 
 
 settings = AppSettings()

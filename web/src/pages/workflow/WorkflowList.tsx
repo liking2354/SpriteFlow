@@ -206,6 +206,21 @@ export function WorkflowListPage() {
     }
   };
 
+  const handleDuplicate = async (id: string, name: string) => {
+    try {
+      const res = await axios.post(`/api/workflow/${id}/duplicate`, {
+        name: `${name} (Copy)`,
+      });
+      loadWorkflows();
+      const newId = res.data?.workflow_id;
+      if (newId) {
+        navigate(`/workflow/${newId}`);
+      }
+    } catch (err: any) {
+      console.error("Failed to duplicate workflow", err);
+    }
+  };
+
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
     setOffset(0);
@@ -413,16 +428,36 @@ export function WorkflowListPage() {
                               ? new Date(w.created_at).toLocaleDateString()
                               : ""}
                         </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(w.id, w.name);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] px-2 py-1 rounded hover:bg-red-500/10"
-                          style={{ color: "var(--txt-3)" }}
-                        >
-                          {t("common.delete", "Delete")}
-                        </button>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicate(w.id, w.name);
+                            }}
+                            className="text-[10px] px-2 py-1 rounded hover:bg-blue-500/10"
+                            style={{ color: "var(--txt-3)" }}
+                            title={t("workflow.duplicate", "Duplicate")}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(w.id, w.name);
+                            }}
+                            className="text-[10px] px-2 py-1 rounded hover:bg-red-500/10"
+                            style={{ color: "var(--txt-3)" }}
+                            title={t("common.delete", "Delete")}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}

@@ -1086,7 +1086,8 @@
     "noPresets": "暂无可用预设模板",
     "startFresh": "从空白开始",
     "usePreset": "点击使用此模板",
-    "use": "使用"
+    "use": "使用",
+    "duplicate": "复制模板"
   },
   "navbar": {
     "inputs": "输入",

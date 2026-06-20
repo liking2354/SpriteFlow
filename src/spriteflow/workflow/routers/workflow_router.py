@@ -20,6 +20,7 @@ from ..workflow_helper import (
     generate_thumbnail_helper,
     get_workflow_defs_helper,
     delete_workflow_def_by_id,
+    duplicate_workflow_helper,
     update_workflow_name_helper,
     get_workflow_last_run,
     architect_workflow_helper,
@@ -108,6 +109,19 @@ async def get_api_node_schemas(workflow_id: str):
 async def delete_workflow_def(workflow_id: str, db: AsyncSession = Depends(get_db)):
     try:
         return await delete_workflow_def_by_id(db, workflow_id)
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{workflow_id}/duplicate")
+async def duplicate_workflow(
+    workflow_id: str, request: Request, db: AsyncSession = Depends(get_db)
+):
+    try:
+        payload = await request.json() if request.headers.get("content-length") else {}
+        return await duplicate_workflow_helper(db, workflow_id, payload)
     except Exception as e:
         if isinstance(e, HTTPException):
             raise e

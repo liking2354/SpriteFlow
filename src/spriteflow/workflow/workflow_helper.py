@@ -408,6 +408,27 @@ async def delete_workflow_def_by_id(db: AsyncSession, workflow_id: str) -> dict:
     return {"detail": "Workflow deleted successfully"}
 
 
+async def duplicate_workflow_helper(db: AsyncSession, workflow_id: str, payload: dict | None = None) -> dict:
+    """
+    POST /api/workflow/{id}/duplicate
+    复制工作流 — 创建完整副本（nodes、edges、category），命名为「原名称 (Copy)」
+    """
+    wf = await _get_workflow(db, workflow_id)
+    new_name = (payload or {}).get("name") or f"{wf.name} (Copy)"
+    new_wf = Workflow(
+        id=gen_uuid(),
+        name=new_name,
+        data=wf.data,
+        edges=wf.edges,
+        category=wf.category,
+        thumbnail=wf.thumbnail,
+    )
+    db.add(new_wf)
+    await db.flush()
+    logger.info("[duplicate_workflow] %s → %s (%s)", workflow_id, new_wf.id, new_name)
+    return {"workflow_id": new_wf.id, "name": new_wf.name}
+
+
 async def update_workflow_name_helper(db: AsyncSession, workflow_id: str, payload: dict) -> dict:
     """
     POST /api/workflow/update-name/{id}

@@ -443,31 +443,30 @@ class ImageGridMergeComponent(Component):
         # 5. 自动保存到素材库
         if auto_save:
             try:
-                from spriteflow.api.deps import get_storage
-                from spriteflow.storage.base import StoragePrefix
-                from spriteflow.asset_hub.ingest import ingest_asset
+                from spriteflow.api.deps import get_storage, get_db
+                from spriteflow.asset_hub.ingest import IngestPipeline
 
                 storage = get_storage()
+                db = get_db()
+                pipeline = IngestPipeline(storage, db)
+
                 buf = io.BytesIO()
                 merged.save(buf, format="PNG")
                 data = buf.getvalue()
 
                 content_hash = hashlib.sha256(data).hexdigest()[:32]
-                file_key = f"grid_merge_{content_hash}.png"
-                asset_uri = await storage.upload(file_key, data, prefix=StoragePrefix.ASSET, content_type="image/png")
+                filename = f"grid_merge_{content_hash}.png"
 
-                await ingest_asset(
-                    uri=asset_uri,
-                    asset_type="image",
-                    filename=f"grid_merge_{content_hash}.png",
-                    meta={
+                asset = await pipeline.ingest(
+                    data=data,
+                    filename=filename,
+                    source="generated",
+                    provenance={
                         "source": "workflow:image-grid-merge",
-                        "width": merged.width,
-                        "height": merged.height,
                         "image_count": len(images),
                     },
                 )
-                logger.info("[ImageGridMerge] auto-saved to asset library: %s", asset_uri)
+                logger.info("[ImageGridMerge] auto-saved to asset library: %s", asset.id)
             except Exception as e:
                 logger.warning("[ImageGridMerge] auto-save failed: %s", e)
 
