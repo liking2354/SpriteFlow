@@ -9,7 +9,7 @@
  * 用顶部步骤条导航，每步可点击回退；已完成的步显示摘要。
  * 全过程纯前端 Canvas，复用 SpriteFlow 现有 UI 与素材接口。
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -17,36 +17,10 @@ import { api } from "@/api/client";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Segment } from "@/components/ui/Segment";
-import { Field, TextInput, Switch } from "@/components/ui/Field";
+import { Field, Switch } from "@/components/ui/Field";
 import { AssetPicker } from "@/components/ui/AssetPicker";
-import {
-  FiAlertTriangle,
-  FiUpload,
-  FiArrowUp,
-  FiArrowDown,
-  FiArrowLeft,
-  FiArrowRight,
-  FiPlusSquare,
-  FiInfo,
-  FiScissors,
-  FiCopy,
-  FiRepeat,
-  FiTrash2,
-  FiSave,
-  FiSearch,
-  FiDownload,
-  FiBox,
-  FiFilm,
-  FiChevronsLeft,
-  FiChevronsRight,
-  FiChevronLeft,
-  FiChevronRight,
-  FiMinus,
-  FiPlus,
-} from "react-icons/fi";
-import { FaCheck, FaChevronDown, FaPause, FaPlay } from "react-icons/fa6";
-import { IoImageOutline, IoClose } from "react-icons/io5";
-import { LuArrowLeftRight, LuArrowUpDown } from "react-icons/lu";
+import { FaCheck, FaPause, FaPlay } from "react-icons/fa6";
+import { IoClose } from "react-icons/io5";
 import {
   type Frame,
   loadImage,
@@ -71,7 +45,7 @@ type SplitMode = "grid" | "transparent";
 type VAlign = "bottom" | "middle" | "top";
 /** 帧尺寸统一策略：off=保持各自原尺寸；pad=扩到最大尺寸（居中补透明）；crop=裁到最小尺寸（居中裁剪） */
 type Unify = "off" | "pad" | "crop";
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 type ProcessingMode = "pixel" | "smooth";
 
 interface FrameState {
@@ -83,6 +57,35 @@ interface FrameState {
 }
 
 let _uid = 0;
+
+/** 滑块拖动数字输入 */
+function SliderInput({
+  value,
+  onChange,
+  min = 1,
+  max = 256,
+  className = "",
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  className?: string;
+}) {
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="flex-1 h-2 appearance-none bg-bg-0 border border-line rounded-full cursor-pointer accent-[var(--acc)]"
+      />
+      <span className="w-10 text-center text-[11px] font-mono text-txt-1 tabular-nums">{value}</span>
+    </div>
+  );
+}
 
 export function SpriteSheetPage() {
   const { t } = useTranslation();
@@ -565,6 +568,20 @@ export function SpriteSheetPage() {
   const orderedSelected = () =>
     frames.filter((f) => f.selected).map((f) => f.frame);
 
+  /** 将选中 Frame 的 canvas 转为 PNG Blob（供 MAGIC 上传时调用） */
+  const getMagicBlobs = useCallback(async (): Promise<Blob[]> => {
+    const sel = frames.filter((f) => f.selected);
+    const blobs = await Promise.all(
+      sel.map(
+        (f) =>
+          new Promise<Blob>((resolve) =>
+            f.frame.canvas.toBlob((b) => resolve(b!), "image/png")
+          )
+      )
+    );
+    return blobs;
+  }, [frames]);
+
   /** 当前导出用的 cell 尺寸选项；0 表示使用原始尺寸 */
   const cellOpts = { ...(cellSize > 0 ? { cellW: cellSize, cellH: cellSize } : {}), align: vAlign, smooth };
 
@@ -603,6 +620,7 @@ export function SpriteSheetPage() {
   // ============ 步骤可达性 ============
   const canStep2 = frames.length > 0;
   const canStep3 = frames.length > 0;
+  const canStep4 = selectedFrames.length > 0;
 
   // ============ 渲染 ============
   return (
@@ -614,9 +632,11 @@ export function SpriteSheetPage() {
           if (s === 1) setStep(1);
           else if (s === 2 && canStep2) setStep(2);
           else if (s === 3 && canStep3) setStep(3);
+          else if (s === 4 && canStep4) setStep(4);
         }}
         canStep2={canStep2}
         canStep3={canStep3}
+        canStep4={canStep4}
         sourceSummary={
           imgEl
             ? t("spritesheet.summarySource", {
@@ -636,7 +656,7 @@ export function SpriteSheetPage() {
       {/* 全局错误提示 */}
       {loadErr && (
         <div className="px-3 py-2 bg-[var(--red)]/10 border border-[var(--red)]/30 rounded-s text-[11.5px] text-[var(--red)]">
-          <FiAlertTriangle size={14} className="inline shrink-0" /> {loadErr}
+          ⚠️ {loadErr}
         </div>
       )}
 
@@ -662,7 +682,7 @@ export function SpriteSheetPage() {
                   onClick={() => fileRef.current?.click()}
                   className="cursor-pointer rounded-l border-2 border-dashed border-line hover:border-[var(--acc)] hover:bg-[var(--acc-soft)]/40 transition-colors py-10 grid place-items-center text-center"
                 >
-                  <div className="mb-2 opacity-60"><FiUpload size={22} /></div>
+                  <div className="mb-2 opacity-60 text-2xl">📤</div>
                   <div className="text-[12.5px] text-txt-1 font-medium mb-1">
                     {t("spritesheet.dropTitle")}
                   </div>
@@ -689,10 +709,10 @@ export function SpriteSheetPage() {
                   onClick={() => fileRef.current?.click()}
                   loading={uploadMut.isPending}
                 >
-                  <FiArrowUp size={14} /> {t("spritesheet.upload")}
+                  📤 {t("spritesheet.upload")}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setPickerOpen(true)}>
-                  <FiPlusSquare size={14} /> {t("spritesheet.fromLibrary")}
+                  📚 {t("spritesheet.fromLibrary")}
                 </Button>
               </div>
             </Card>
@@ -712,20 +732,10 @@ export function SpriteSheetPage() {
                 {mode === "grid" ? (
                   <div className="grid grid-cols-2 gap-3">
                     <Field label={t("spritesheet.cols")}>
-                      <TextInput
-                        type="number"
-                        min={1}
-                        value={cols}
-                        onChange={(e) => setCols(Math.max(1, Number(e.target.value) || 1))}
-                      />
+                      <SliderInput value={cols} onChange={setCols} min={1} max={64} />
                     </Field>
                     <Field label={t("spritesheet.rows")}>
-                      <TextInput
-                        type="number"
-                        min={1}
-                        value={rows}
-                        onChange={(e) => setRows(Math.max(1, Number(e.target.value) || 1))}
-                      />
+                      <SliderInput value={rows} onChange={setRows} min={1} max={64} />
                     </Field>
                   </div>
                 ) : (
@@ -812,11 +822,11 @@ export function SpriteSheetPage() {
                 )}
                 {mode === "grid" && (
                   <div className="text-[10.5px] text-txt-3 leading-relaxed -mt-1">
-                    <FiInfo size={14} className="inline shrink-0" /> {t("spritesheet.dragHint")}
+                    ℹ️ {t("spritesheet.dragHint")}
                   </div>
                 )}
                 <Button variant="primary" className="w-full mt-1" onClick={doSplit}>
-                  <FiScissors size={14} /> {t("spritesheet.doSplit")}
+                  ✂️ {t("spritesheet.doSplit")}
                 </Button>
               </Card>
             )}
@@ -860,14 +870,14 @@ export function SpriteSheetPage() {
             actions={
               <div className="flex flex-wrap items-center gap-1.5">
                 {/* 批量操作：紧凑图标按钮，hover 显 tooltip */}
-                <IconBatch disabled={!hasSelection} onClick={batchDuplicate} title={t("spritesheet.batchDuplicate")}><FiCopy size={14} /></IconBatch>
-                <IconBatch disabled={!hasSelection} onClick={batchFlip} title={t("spritesheet.batchFlip")}><FiRepeat size={14} /></IconBatch>
-                <IconBatch disabled={!hasSelection} onClick={batchDelete} title={t("spritesheet.batchDelete")} danger><FiTrash2 size={14} /></IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={batchDuplicate} title={t("spritesheet.batchDuplicate")}>📋</IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={batchFlip} title={t("spritesheet.batchFlip")}>↔️</IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={batchDelete} title={t("spritesheet.batchDelete")} danger>🗑️</IconBatch>
                 <span className="mx-0.5 w-px h-4 bg-line" />
-                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedRows(-1)} title={t("spritesheet.moveUp")}><FiArrowUp size={13} /></IconBatch>
-                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedRows(1)} title={t("spritesheet.moveDown")}><FiArrowDown size={13} /></IconBatch>
-                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedCols(-1)} title={t("spritesheet.moveLeft")}><FiArrowLeft size={13} /></IconBatch>
-                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedCols(1)} title={t("spritesheet.moveRight")}><FiArrowRight size={13} /></IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedRows(-1)} title={t("spritesheet.moveUp")}>↑</IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedRows(1)} title={t("spritesheet.moveDown")}>↓</IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedCols(-1)} title={t("spritesheet.moveLeft")}>←</IconBatch>
+                <IconBatch disabled={!hasSelection} onClick={() => moveSelectedCols(1)} title={t("spritesheet.moveRight")}>→</IconBatch>
                 <span className="mx-0.5 w-px h-4 bg-line" />
                 <button
                   onClick={() => selectAll(true)}
@@ -1047,7 +1057,7 @@ export function SpriteSheetPage() {
                                 duplicateFrame(f.id);
                               }}
                             >
-                              <FiCopy size={12} />
+                              📋
                             </IconMini>
                             <IconMini
                               title={t("spritesheet.flip")}
@@ -1056,7 +1066,7 @@ export function SpriteSheetPage() {
                                 flipFrame(f.id);
                               }}
                             >
-                              <FiRepeat size={12} />
+                              ↔️
                             </IconMini>
                             <IconMini
                               title={t("common.delete")}
@@ -1065,7 +1075,7 @@ export function SpriteSheetPage() {
                                 deleteFrame(f.id);
                               }}
                             >
-                              <FiTrash2 size={12} />
+                              🗑️
                             </IconMini>
                           </div>
                         </div>
@@ -1173,33 +1183,6 @@ export function SpriteSheetPage() {
                   </div>
                 </div>
 
-                {/* 处理模式 */}
-                <div className="flex items-center gap-2 pt-0.5">
-                  <span className="text-[11px] text-txt-2 shrink-0">{t("spritesheet.processingMode")}</span>
-                  <div className="flex rounded-s border border-line overflow-hidden ml-auto">
-                    <button
-                      onClick={() => setProcessingMode("pixel")}
-                      className={`px-2.5 h-6 text-[10px] transition-colors ${
-                        processingMode === "pixel"
-                          ? "bg-[var(--acc)] text-white"
-                          : "bg-bg-3 text-txt-2 hover:text-txt-1"
-                      }`}
-                    >
-                      {t("spritesheet.modePixel")}
-                    </button>
-                    <button
-                      onClick={() => setProcessingMode("smooth")}
-                      className={`px-2.5 h-6 text-[10px] transition-colors ${
-                        processingMode === "smooth"
-                          ? "bg-[var(--acc)] text-white"
-                          : "bg-bg-3 text-txt-2 hover:text-txt-1"
-                      }`}
-                    >
-                      {t("spritesheet.modeSmooth")}
-                    </button>
-                  </div>
-                </div>
-
                 {/* 当前帧微调 */}
                 {frames[activeIdx] && (
                   <div className="pt-2.5 border-t border-line">
@@ -1213,15 +1196,15 @@ export function SpriteSheetPage() {
                     </div>
                     {/* 第一行：方向微调 + 翻转 */}
                     <div className="flex items-center gap-1.5">
-                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, -1, 0)}><FiArrowLeft size={14} /></NudgeBtn>
-                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, 1, 0)}><FiArrowRight size={14} /></NudgeBtn>
-                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, 0, -1)}><FiArrowUp size={14} /></NudgeBtn>
-                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, 0, 1)}><FiArrowDown size={14} /></NudgeBtn>
+                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, -1, 0)}>←</NudgeBtn>
+                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, 1, 0)}>→</NudgeBtn>
+                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, 0, -1)}>↑</NudgeBtn>
+                      <NudgeBtn onClick={() => nudge(frames[activeIdx].id, 0, 1)}>↓</NudgeBtn>
                       <button
                         onClick={() => flipFrame(frames[activeIdx].id)}
                         className="ml-auto px-2.5 h-7 rounded-s border border-line bg-bg-3 text-[11px] text-txt-1 hover:text-txt-0 hover:border-[var(--acc)]"
                       >
-                        <FiRepeat size={14} /> {t("spritesheet.flip")}
+                        ↔️ {t("spritesheet.flip")}
                       </button>
                     </div>
                     {/* 第二行：单帧位置移动（在帧序列中） */}
@@ -1233,25 +1216,25 @@ export function SpriteSheetPage() {
                         onClick={() => moveActiveBy(-Infinity)}
                         title={t("spritesheet.moveToFirst")}
                       >
-                        <FiChevronsLeft size={14} />
+                        ⏮
                       </PosBtn>
                       <PosBtn
                         onClick={() => moveActiveBy(-1)}
                         title={t("spritesheet.movePrev")}
                       >
-                        <FiChevronLeft size={14} />
+                        ◀
                       </PosBtn>
                       <PosBtn
                         onClick={() => moveActiveBy(1)}
                         title={t("spritesheet.moveNext")}
                       >
-                        <FiChevronRight size={14} />
+                        ▶
                       </PosBtn>
                       <PosBtn
                         onClick={() => moveActiveBy(Infinity)}
                         title={t("spritesheet.moveToLast")}
                       >
-                        <FiChevronsRight size={14} />
+                        ⏭
                       </PosBtn>
                       <span className="ml-auto text-[10.5px] text-txt-3 font-mono">
                         {activeIdx + 1} / {frames.length}
@@ -1264,7 +1247,7 @@ export function SpriteSheetPage() {
                         title={t("spritesheet.duplicateFrame")}
                         className="flex-1 h-7 rounded-s border border-line bg-bg-3 text-[11px] text-txt-1 hover:text-txt-0 hover:border-[var(--acc)]"
                       >
-                        <FiCopy size={14} /> {t("spritesheet.duplicateFrame")}
+                        📋 {t("spritesheet.duplicateFrame")}
                       </button>
                       <button
                         onClick={() => {
@@ -1278,7 +1261,7 @@ export function SpriteSheetPage() {
                         title={t("spritesheet.deleteFrame")}
                         className="flex-1 h-7 rounded-s border border-[var(--red)]/40 bg-bg-3 text-[11px] text-[var(--red)] hover:bg-[var(--red)]/10 hover:border-[var(--red)]"
                       >
-                        <FiTrash2 size={14} /> {t("spritesheet.deleteFrame")}
+                        🗑️ {t("spritesheet.deleteFrame")}
                       </button>
                     </div>
                     {/* 第四行：等比例缩放 */}
@@ -1332,7 +1315,7 @@ export function SpriteSheetPage() {
                           onClick={() => scaleCurrent(scalePct / 100)}
                           className="ml-auto h-6 px-3 rounded-s text-[10px] border border-[var(--acc)]/50 bg-[var(--acc)]/10 text-txt-1 hover:bg-[var(--acc)]/20 hover:border-[var(--acc)]"
                         >
-                          {t("spritesheet.scaleApply")}
+                          {t("spritesheet.scaleApplyTo", { n: activeIdx + 1 })}
                         </button>
                       </div>
                       {/* 批量应用 */}
@@ -1353,10 +1336,10 @@ export function SpriteSheetPage() {
             {/* 步骤导航 */}
             <div className="grid grid-cols-2 gap-2">
               <Button variant="ghost" onClick={() => setStep(1)}>
-              <FiArrowLeft size={14} /> {t("spritesheet.reSplit")}
+              ← {t("spritesheet.reSplit")}
               </Button>
               <Button variant="primary" disabled={!canStep3} onClick={() => setStep(3)}>
-              {t("spritesheet.next")} <FiArrowRight size={14} />
+              {t("spritesheet.next")} →
               </Button>
             </div>
           </div>
@@ -1412,12 +1395,7 @@ export function SpriteSheetPage() {
             </Field>
 
             <Field label={t("spritesheet.layoutCols")}>
-              <TextInput
-                type="number"
-                min={1}
-                value={layoutCols}
-                onChange={(e) => setLayoutCols(Math.max(1, Number(e.target.value) || 1))}
-              />
+              <SliderInput value={layoutCols} onChange={setLayoutCols} min={1} max={64} />
             </Field>
             <Field label={t("spritesheet.vAlign")}>
               <Segment
@@ -1456,51 +1434,66 @@ export function SpriteSheetPage() {
               </div>
             </Field>
 
-            {/* 主操作：保存 / 下载（含格式菜单） */}
-            <div className="grid grid-cols-2 gap-2 mt-3">
-              <Button
-                variant="primary"
-                loading={busy === "save"}
-                onClick={handleSaveSheet}
-                title={t("spritesheet.saveTooltip")}
-              >
-                <FiSave size={14} /> {t("spritesheet.saveLibrary")}
-              </Button>
-              <DownloadMenu
-                busy={busy}
-                onZip={handleZip}
-                onGif={handleGif}
-                onPng={handleRecombine}
-              />
+            {/* 资源处理 */}
+            <div className="mt-3 pt-3 border-t border-line">
+              <div className="text-[10.5px] text-txt-3 mb-2">{t("spritesheet.assetAction", "资源处理")}</div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="primary"
+                  loading={busy === "save"}
+                  onClick={handleSaveSheet}
+                  title={t("spritesheet.saveTooltip")}
+                  className="h-9"
+                >
+                  💾 {t("spritesheet.saveLibrary")}
+                </Button>
+                <DownloadMenu
+                  busy={busy}
+                  onZip={handleZip}
+                  onGif={handleGif}
+                  onPng={handleRecombine}
+                />
+              </div>
             </div>
 
             <div className="flex items-center justify-between pt-4 mt-4 border-t border-line">
               <Button variant="ghost" onClick={() => setStep(2)}>
-              <FiArrowLeft size={14} /> {t("spritesheet.prev")}
+              ← {t("spritesheet.prev")}
               </Button>
             </div>
           </Card>
 
-          {/* 右：合成预览（缩略 + 查看大图） */}
-          <Card
-            title={t("spritesheet.recombine")}
-            actions={
-              <Button size="sm" variant="ghost" onClick={() => setPreviewLightbox(true)}>
-                <FiSearch size={14} /> {t("spritesheet.viewDetail")}
-              </Button>
-            }
-          >
-            <RecombinePreview
-              frames={
-                cellSize > 0
-                  ? fitFramesToCell(orderedSelected(), cellSize, cellSize, vAlign, smooth)
-                  : orderedSelected()
+          {/* 右：合成预览 */}
+          <div className="flex flex-col gap-5">
+            <Card
+              title={t("spritesheet.recombine")}
+              actions={
+                <Button size="sm" variant="ghost" onClick={() => setPreviewLightbox(true)}>
+                  🔍 {t("spritesheet.viewDetail")}
+                </Button>
               }
-              cols={layoutCols}
-              maxHeight={400}
-              onOpen={() => setPreviewLightbox(true)}
-            />
-          </Card>
+            >
+              <RecombinePreview
+                frames={
+                  cellSize > 0
+                    ? fitFramesToCell(orderedSelected(), cellSize, cellSize, vAlign, smooth)
+                    : orderedSelected()
+                }
+                cols={layoutCols}
+                maxHeight={400}
+                onOpen={() => setPreviewLightbox(true)}
+              />
+            </Card>
+
+            {/* → 进入 MAGIC 处理 */}
+            {canStep4 && (
+              <div className="flex items-center justify-end">
+                <Button variant="primary" onClick={() => setStep(4)}>
+                  {t("spritesheet.toMagic", "MAGIC 超分辨率处理 →")}
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1517,6 +1510,16 @@ export function SpriteSheetPage() {
         />
       )}
 
+      {/* ============ 步骤 4：MAGIC 超分辨率处理 ============ */}
+      {step === 4 && selectedFrames.length > 0 && (
+        <MagicStep
+          getFrames={getMagicBlobs}
+          label={sourceLabel || "sprite-sheet"}
+          onBack={() => setStep(3)}
+          t={t}
+        />
+      )}
+
       <AssetPicker
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
@@ -1527,6 +1530,317 @@ export function SpriteSheetPage() {
   );
 }
 
+// ====================== 步骤 4：MAGIC 超分辨率处理 ======================
+
+const MAGIC_VARIANT_INFO: Record<string, { label: string; desc: string }> = {
+  half:    { label: "MAGIC 1/2", desc: "画布为原尺寸 ½" },
+  quarter: { label: "MAGIC 1/4", desc: "画布为原尺寸 ¼" },
+  eighth:  { label: "MAGIC 1/8", desc: "画布为原尺寸 ⅛" },
+};
+
+function MagicStep({
+  getFrames,
+  label,
+  onBack,
+  t,
+}: {
+  getFrames: () => Promise<Blob[]>;
+  label: string;
+  onBack: () => void;
+  t: (key: string, fallback?: string) => string;
+}) {
+  const queryClient = useQueryClient();
+  const [resizeMode, setResizeMode] = useState<"hard" | "soft">("hard");
+  const [gridCols, setGridCols] = useState(8);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{
+    magic_id: string;
+    frames_count: number;
+    source_size: { width: number; height: number };
+    resize_mode: string;
+    upscale_available: boolean;
+    variants: { key: string; label: string; scale: number; output_size: number[] | null }[];
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [variantImages, setVariantImages] = useState<Record<string, string>>({});
+  const [saveBusy, setSaveBusy] = useState<Record<string, boolean>>({});
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  const handleMagic = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    setVariantImages({});
+
+    try {
+      const frames = await getFrames();
+      if (frames.length === 0) throw new Error("没有可处理的帧");
+
+      const formData = new FormData();
+      formData.append("label", label);
+      formData.append("resize_mode", resizeMode);
+      for (let i = 0; i < frames.length; i++) {
+        formData.append("frames", frames[i], `frame_${i.toString().padStart(4, "0")}.png`);
+      }
+
+      const resp = await fetch("/api/magic/process-upload", { method: "POST", body: formData });
+      if (!resp.ok) {
+        const detail = (await resp.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(detail.detail || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json() as typeof result;
+      if (!data) return;
+      setResult(data);
+
+      // 加载各变体第一帧预览
+      if (data.magic_id && data.variants) {
+        for (const v of data.variants) {
+          try {
+            const imgResp = await fetch(`/api/magic/${data.magic_id}/frames/${v.key}/frame_0000.png`);
+            if (imgResp.ok) {
+              const blob = await imgResp.blob();
+              setVariantImages(prev => ({ ...prev, [v.key]: URL.createObjectURL(blob) }));
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDownloadZip = (variantKey: string) => {
+    if (!result?.magic_id) return;
+    const a = document.createElement("a");
+    a.href = `/api/magic/${result.magic_id}/export/${variantKey}`;
+    a.download = `magic-${variantKey}-frames.zip`;
+    a.click();
+  };
+
+  const handleDownloadSheet = (variantKey: string) => {
+    if (!result?.magic_id) return;
+    const a = document.createElement("a");
+    a.href = `/api/magic/${result.magic_id}/spritesheet/${variantKey}?columns=${gridCols}`;
+    a.download = `magic-${variantKey}-sheet.png`;
+    a.click();
+  };
+
+  const handleSaveToLibrary = async (variantKey: string) => {
+    if (!result?.magic_id) return;
+    setSaveBusy(prev => ({ ...prev, [variantKey]: true }));
+    try {
+      const resp = await fetch(`/api/magic/${result.magic_id}/save-to-library/${variantKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ columns: gridCols }),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json() as { asset_id: string; uri: string; variant: string };
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+      setSavedMsg(t("spritesheet.magicSaved", "已保存 MAGIC {{variant}} 合成图到素材库", { variant: data.variant }) || `已保存 MAGIC ${data.variant} 合成图到素材库`);
+      setTimeout(() => setSavedMsg(null), 4000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaveBusy(prev => ({ ...prev, [variantKey]: false }));
+    }
+  };
+
+  return (
+    <div className="grid gap-5 items-start" style={{ gridTemplateColumns: "minmax(320px, 380px) 1fr" }}>
+      {/* ====== 左：参数设置 ====== */}
+      <Card title={t("spritesheet.magicSettings", "MAGIC 参数设置")}>
+        {/* 缩放模式 */}
+        <Field label={t("spritesheet.magicResizeMode", "缩放模式")}>
+          <div className="space-y-2">
+            <label className={`flex items-start gap-2 p-2.5 rounded-s border cursor-pointer transition-colors ${resizeMode === "hard" ? "border-[var(--acc)] bg-[var(--acc)]/10" : "border-line bg-bg-3"}`}>
+              <input
+                type="radio" name="magicStepResize" value="hard"
+                checked={resizeMode === "hard"} onChange={() => setResizeMode("hard")}
+                disabled={busy} className="mt-0.5"
+              />
+              <div>
+                <span className="text-xs font-medium" style={{ color: resizeMode === "hard" ? "var(--acc)" : "var(--txt-1)" }}>
+                  {t("spritesheet.magicHard", "硬 (像素边缘)")}
+                </span>
+                <p className="text-[10.5px] mt-0.5 text-txt-3">
+                  {t("spritesheet.magicHardDesc", "最近邻缩小，保留硬朗像素边缘，适合像素风 Sprite 动画 / 点阵游戏素材")}
+                </p>
+              </div>
+            </label>
+            <label className={`flex items-start gap-2 p-2.5 rounded-s border cursor-pointer transition-colors ${resizeMode === "soft" ? "border-[var(--acc)] bg-[var(--acc)]/10" : "border-line bg-bg-3"}`}>
+              <input
+                type="radio" name="magicStepResize" value="soft"
+                checked={resizeMode === "soft"} onChange={() => setResizeMode("soft")}
+                disabled={busy} className="mt-0.5"
+              />
+              <div>
+                <span className="text-xs font-medium" style={{ color: resizeMode === "soft" ? "var(--acc)" : "var(--txt-1)" }}>
+                  {t("spritesheet.magicSoft", "软 (平滑抗锯齿)")}
+                </span>
+                <p className="text-[10.5px] mt-0.5 text-txt-3">
+                  {t("spritesheet.magicSoftDesc", "BOX 缩小平滑边缘，适合需要柔和抗锯齿的现代风格插画素材")}
+                </p>
+              </div>
+            </label>
+          </div>
+        </Field>
+
+        {/* 合成每行帧数 */}
+        <Field label={t("spritesheet.magicGridCols", "合成每行帧数")}>
+          <SliderInput value={gridCols} onChange={setGridCols} min={1} max={64} />
+        </Field>
+
+        {/* MAGIC 按钮 */}
+        <div className="mt-3">
+          <button
+            onClick={handleMagic}
+            disabled={busy}
+            className="w-full py-2 rounded-lg text-sm font-medium transition-all"
+            style={{
+              background: busy ? "var(--line)" : "#f59e0b",
+              color: busy ? "var(--txt-3)" : "#fff",
+              cursor: busy ? "not-allowed" : "pointer",
+            }}
+          >
+            {busy ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity=".3" />
+                  <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" fill="none" />
+                </svg>
+                {t("spritesheet.magicProcessing", "MAGIC 处理中...")}
+              </span>
+            ) : (
+              `✨ ${t("spritesheet.magicRun", "开始 MAGIC 处理")}`
+            )}
+          </button>
+        </div>
+
+        {/* 错误提示 */}
+        {error && (
+          <div className="mt-3 text-xs p-2 rounded" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
+            {error}
+            <button onClick={() => setError(null)} className="ml-2 underline" style={{ color: "#ef4444" }}>关闭</button>
+          </div>
+        )}
+
+        {/* 保存成功提示 */}
+        {savedMsg && (
+          <div className="mt-3 text-xs p-2 rounded" style={{ background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>{savedMsg}</div>
+        )}
+
+        <div className="flex items-center justify-between pt-4 mt-4 border-t border-line">
+          <Button variant="ghost" onClick={onBack}>
+            ← {t("spritesheet.prev")}
+          </Button>
+          {result && (
+            <span className="text-[11px] text-txt-3">
+              {t("spritesheet.magicProcessed", "已处理 {{count}} 帧", { count: result.frames_count })}
+            </span>
+          )}
+        </div>
+      </Card>
+
+      {/* ====== 右：结果展示 ====== */}
+      <div>
+        {result?.variants && result.variants.length > 0 ? (
+          <div className="grid grid-cols-3 gap-3">
+            {result.variants.map((v) => {
+              const info = MAGIC_VARIANT_INFO[v.key] || { label: v.label, desc: "" };
+              const imgUrl = variantImages[v.key];
+              const saving = saveBusy[v.key];
+
+              return (
+                <div
+                  key={v.key}
+                  className="rounded-lg border p-3"
+                  style={{ background: "var(--bg-2)", borderColor: "var(--line)" }}
+                >
+                  {/* 变体标签 */}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold" style={{ color: "var(--txt-0)" }}>
+                      {info.label}
+                    </span>
+                    <span className="text-[10px]" style={{ color: "var(--txt-3)" }}>
+                      {info.desc}
+                    </span>
+                  </div>
+
+                  {/* 预览 */}
+                  <div
+                    className="w-full aspect-square rounded flex items-center justify-center mb-2"
+                    style={{ background: "repeating-conic-gradient(var(--bg-3) 0% 25%, transparent 0% 50%) 50% / 16px 16px" }}
+                  >
+                    {imgUrl ? (
+                      <img
+                        src={imgUrl}
+                        alt={info.label}
+                        className="max-w-full max-h-full object-contain"
+                        style={{ imageRendering: resizeMode === "hard" ? "pixelated" : "auto" }}
+                      />
+                    ) : (
+                      <span className="text-xs text-txt-3">-</span>
+                    )}
+                  </div>
+
+                  {/* 输出尺寸 */}
+                  {v.output_size && (
+                    <div className="text-[10px] mb-2" style={{ color: "var(--txt-2)" }}>
+                      {v.output_size[0]} × {v.output_size[1]}
+                    </div>
+                  )}
+
+                  {/* 操作按钮 */}
+                  <div className="space-y-1.5">
+                    <button
+                      onClick={() => handleDownloadZip(v.key)}
+                      className="w-full py-1 rounded text-xs font-medium transition-colors"
+                      style={{ background: "var(--bg-3)", color: "var(--txt-1)", border: "1px solid var(--line)" }}
+                    >
+                      {t("spritesheet.magicDownloadZip", "下载 ZIP")}
+                    </button>
+                    <button
+                      onClick={() => handleDownloadSheet(v.key)}
+                      className="w-full py-1 rounded text-xs font-medium transition-colors"
+                      style={{ background: "var(--acc-soft)", color: "var(--acc)" }}
+                    >
+                      {t("spritesheet.magicDownloadSheet", "下载合成PNG")}
+                    </button>
+                    <button
+                      onClick={() => handleSaveToLibrary(v.key)}
+                      disabled={saving}
+                      className="w-full py-1 rounded text-xs font-medium transition-colors"
+                      style={{
+                        background: saving ? "var(--line)" : "var(--green-soft, rgba(34,197,94,0.15))",
+                        color: saving ? "var(--txt-3)" : "#22c55e",
+                      }}
+                    >
+                      {saving ? t("spritesheet.magicSaving", "保存中...") : `💾 ${t("spritesheet.magicSaveLibrary", "保存到素材库")}`}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <Card title={t("spritesheet.magicResult", "MAGIC 处理结果")}>
+            <div className="py-8 text-center text-xs text-txt-3">
+              {busy
+                ? t("spritesheet.magicWaiting", "正在处理中，请稍候...")
+                : t("spritesheet.magicHint", "左侧设置参数后点击「开始 MAGIC 处理」，结果将显示在此处")}
+            </div>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 // ====================== 子组件 ======================
 
 function Stepper({
@@ -1534,6 +1848,7 @@ function Stepper({
   onJump,
   canStep2,
   canStep3,
+  canStep4,
   sourceSummary,
   framesSummary,
 }: {
@@ -1541,6 +1856,7 @@ function Stepper({
   onJump: (s: Step) => void;
   canStep2: boolean;
   canStep3: boolean;
+  canStep4: boolean;
   sourceSummary: string;
   framesSummary: string;
 }) {
@@ -1566,11 +1882,17 @@ function Stepper({
       hint: t("spritesheet.stepHintExport"),
       enabled: canStep3,
     },
+    {
+      id: 4,
+      label: t("spritesheet.stepMagic", "MAGIC"),
+      hint: t("spritesheet.stepHintMagic", "超分辨率处理（按需）"),
+      enabled: canStep4,
+    },
   ];
 
   return (
     <div className="rounded-l border border-line bg-bg-2 p-3">
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         {items.map((it, i) => {
           const active = it.id === step;
           const done = it.id < step;
@@ -1838,13 +2160,13 @@ function SplitPreview({
               onClick={onResetX}
               className="px-2 h-6 rounded-s border border-line bg-bg-3 text-txt-1 hover:text-txt-0 hover:border-[var(--acc)]"
             >
-              <LuArrowLeftRight size={14} /> {t("spritesheet.resetCuts")}
+              ↔ {t("spritesheet.resetCuts")}
             </button>
             <button
               onClick={onResetY}
               className="px-2 h-6 rounded-s border border-line bg-bg-3 text-txt-1 hover:text-txt-0 hover:border-[var(--acc)]"
             >
-              <LuArrowUpDown size={14} /> {t("spritesheet.resetCuts")}
+              ↕ {t("spritesheet.resetCuts")}
             </button>
           </span>
         </div>
@@ -1954,13 +2276,13 @@ function DownloadMenu({
   return (
     <div ref={wrapRef} className="relative">
       <Button variant="outline" loading={isBusy} onClick={() => setOpen((o) => !o)}>
-        <FiDownload size={14} /> {t("spritesheet.download")} <FaChevronDown size={10} className="ml-1 opacity-60" />
+        ⬇️ {t("spritesheet.download")} ▾
       </Button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-48 rounded-s border border-line bg-bg-2 shadow-2xl z-30 overflow-hidden">
-          <DLMenuItem onClick={() => { setOpen(false); onPng(); }} icon={<IoImageOutline size={16} />} title={t("spritesheet.dlPng")} hint={t("spritesheet.dlPngHint")} />
-          <DLMenuItem onClick={() => { setOpen(false); onZip(); }} icon={<FiBox size={16} />} title={t("spritesheet.dlZip")} hint={t("spritesheet.dlZipHint")} />
-          <DLMenuItem onClick={() => { setOpen(false); onGif(); }} icon={<FiFilm size={16} />} title={t("spritesheet.dlGif")} hint={t("spritesheet.dlGifHint")} />
+          <DLMenuItem onClick={() => { setOpen(false); onPng(); }} icon="🖼️" title={t("spritesheet.dlPng")} hint={t("spritesheet.dlPngHint")} />
+          <DLMenuItem onClick={() => { setOpen(false); onZip(); }} icon="📦" title={t("spritesheet.dlZip")} hint={t("spritesheet.dlZipHint")} />
+          <DLMenuItem onClick={() => { setOpen(false); onGif(); }} icon="🎬" title={t("spritesheet.dlGif")} hint={t("spritesheet.dlGifHint")} />
         </div>
       )}
     </div>
@@ -1973,7 +2295,7 @@ function DLMenuItem({
   hint,
   onClick,
 }: {
-  icon: React.ReactNode;
+  icon: string;
   title: string;
   hint: string;
   onClick: () => void;
@@ -1984,7 +2306,7 @@ function DLMenuItem({
       className="w-full text-left px-3 py-2 hover:bg-[var(--acc)]/10 border-b border-line last:border-b-0"
     >
       <div className="flex items-center gap-2 text-[12px] text-txt-1">
-        <span className="inline-flex">{icon}</span>
+        <span>{icon}</span>
         <span>{title}</span>
       </div>
       <div className="text-[10.5px] text-txt-3 mt-0.5 ml-6">{hint}</div>
@@ -2087,13 +2409,13 @@ function Lightbox({
           onClick={() => setZoom((z) => Math.max(0.05, z / 1.2))}
           className="px-2 h-6 rounded-s border border-line bg-bg-3 text-txt-1 hover:border-[var(--acc)]"
         >
-          <FiMinus size={16} />
+          −
         </button>
         <button
           onClick={() => setZoom((z) => Math.min(20, z * 1.2))}
           className="px-2 h-6 rounded-s border border-line bg-bg-3 text-txt-1 hover:border-[var(--acc)]"
         >
-          <FiPlus size={16} />
+          +
         </button>
         <button
           onClick={reset}

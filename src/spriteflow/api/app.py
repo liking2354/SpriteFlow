@@ -46,6 +46,7 @@ from .config import router as config_router
 from .menu import router as menu_router
 from .video_frames import router as video_frames_router
 from .image_editor import router as image_editor_router
+from .magic import router as magic_router
 from ..model_manager.routers.channel_router import router as mm_channel_router
 from ..model_manager.routers.route_router import router as mm_route_router
 from ..model_manager.database import init_db as init_mm_db
@@ -329,6 +330,7 @@ def create_app() -> FastAPI:
     app.include_router(menu_router, prefix="/api", tags=["menu"])
     app.include_router(video_frames_router, prefix="/api", tags=["video-frames"])
     app.include_router(image_editor_router, prefix="/api", tags=["image-editor"])
+    app.include_router(magic_router, prefix="/api/magic", tags=["magic"])
     app.include_router(mm_channel_router, prefix="/api/model-manager", tags=["model-manager"])
     app.include_router(mm_route_router, prefix="/api/model-manager", tags=["model-manager"])
     app.include_router(wf_router, prefix="/api/workflow", tags=["workflow"])

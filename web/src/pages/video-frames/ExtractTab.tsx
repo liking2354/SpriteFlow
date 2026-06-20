@@ -5,7 +5,7 @@ import type { VFProbeResponse, VFJobResponse } from "@/api/types";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, TextInput, Select } from "@/components/ui/Field";
-import { loadImage, exportFramesZip, exportFramesGif, recombineFrames, downloadBlob, flipFrameH, shiftFrame } from "@/lib/spritesheet";
+import { loadImage, exportFramesZip, exportFramesGif, recombineFrames, downloadBlob, flipFrameH, shiftFrame, scaleFrame } from "@/lib/spritesheet";
 import type { Frame } from "@/lib/spritesheet";
 import { type MatteModel, MATTE_MODEL_OPTIONS, DEFAULT_MATTE_MODEL } from "@/constants/matte";
 
@@ -629,6 +629,7 @@ export function ExtractTab({ onNewJob }: { onNewJob?: () => void }) {
   // === Step 2: Batch operations ===
   const [offsetX, setOffsetX] = useState(0);
   const [offsetY, setOffsetY] = useState(0);
+  const [scalePct, setScalePct] = useState(100);
   const [gridCols, setGridCols] = useState(8);
 
   // === Export ===
@@ -810,6 +811,23 @@ export function ExtractTab({ onNewJob }: { onNewJob?: () => void }) {
       return next;
     });
     setOffsetX(0); setOffsetY(0);
+  };
+
+  const applyScale = () => {
+    if (scalePct === 100) return;
+    const scale = scalePct / 100;
+    const s = processingMode === "smooth";
+    setCanvasFrames(prev => {
+      const next = { ...prev };
+      for (const f of frames) {
+        if (f.selected && next[f.index]) {
+          const scaled = scaleFrame({ canvas: next[f.index], width: next[f.index].width, height: next[f.index].height }, scale, s);
+          next[f.index] = scaled.canvas;
+        }
+      }
+      return next;
+    });
+    setScalePct(100);
   };
 
   const handleAiMatte = async () => {
@@ -1243,6 +1261,24 @@ export function ExtractTab({ onNewJob }: { onNewJob?: () => void }) {
                     {t("videoFrames.new.offsetApply")}
                   </Button>
                 </div>
+
+                {/* Content Scale — single row */}
+                <div className="flex items-center gap-1">
+                  <span className="text-[9px] text-txt-3 shrink-0">{t("videoFrames.new.contentScale", "缩放")}</span>
+                  <input
+                    type="range"
+                    min={1} max={200} step={1}
+                    value={scalePct}
+                    onChange={(e) => setScalePct(Number(e.target.value))}
+                    className="flex-1 h-2 appearance-none bg-bg-0 border border-line rounded-full cursor-pointer accent-[var(--acc)]"
+                  />
+                  <button onClick={() => setScalePct(p => Math.max(1, p - 5))} className="w-5 h-5 grid place-items-center rounded border border-line bg-bg-2 text-[10px] text-txt-2 hover:text-txt-1">−</button>
+                  <span className="text-[9px] text-txt-3 font-mono w-8 text-center">{scalePct}%</span>
+                  <button onClick={() => setScalePct(p => Math.min(200, p + 5))} className="w-5 h-5 grid place-items-center rounded border border-line bg-bg-2 text-[10px] text-txt-2 hover:text-txt-1">+</button>
+                  <Button size="sm" variant="primary" onClick={applyScale} disabled={scalePct === 100} className="!px-2 !py-0.5 !text-[9px] shrink-0">
+                    {t("videoFrames.new.scaleApply")}
+                  </Button>
+                </div>
               </div>
             </Card>
 
@@ -1359,6 +1395,7 @@ export function ExtractTab({ onNewJob }: { onNewJob?: () => void }) {
                 </Button>
               </div>
             </div>
+
           </Card>
 
           {/* Right: Client-side Preview */}
@@ -1379,3 +1416,4 @@ export function ExtractTab({ onNewJob }: { onNewJob?: () => void }) {
     </div>
   );
 }
+

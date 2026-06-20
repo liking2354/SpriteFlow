@@ -16,7 +16,7 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
 - **AI Workflow** — Visual node editor with presets, real-time execution, resume-from-failed, text/image/video/audio nodes
 - **Model Manager** — Multi-provider model registry with channels, routing, and cost tracking
 - **Character Pipeline** — Master template → direction variants → animation sprites → sprite sheets
-- **Image Processing** — Background removal, sprite alignment, sprite sheet packing, video frame extraction with key frame selection (cycle detection / uniform / diversity), image grid merge
+- **Image Processing** — Background removal, sprite alignment, sprite sheet packing with 4-step workflow (split → edit → export → MAGIC super-resolution), video frame extraction with key frame selection (cycle detection / uniform / diversity) and content scaling, image grid merge
 - **Video Generation** — Text-to-Video and Image-to-Video via Seedance
 - **Asset Management** — Upload, organize, tag, group, favorite, lineage tracking
 - **Visual Graph Editor** — Drag-and-drop pipeline composition with React Flow
@@ -344,7 +344,7 @@ SpriteFlow/
 | **SequentialImages** | Generate | Generate coherent image sequences |
 | **RemoveBG** | Process | AI background removal |
 | **SpriteAlign** | Process | Detect → Crop → Scale → Align |
-| **ExtractFrames** | Process | Extract frames from video with key frame selection (cycle detection / uniform / diversity) |
+| **ExtractFrames** | Process | Extract frames from video with key frame selection (cycle detection / uniform / diversity) + content scaling (slider 1%–200%) |
 | **PackSpritesheet** | Process | Pack frames into sprite sheet |
 | **GridMerge** | Process | Merge multiple images into a configurable grid (columns × rows) |
 | **SaveAsset** | Output | Save images to library |
@@ -367,6 +367,20 @@ SpriteFlow/
 | **ImageGridMerge** | Merge multiple images into a grid layout with configurable columns, rows, and spacing |
 
 Custom components are self-contained plugins with independent schemas, credentials, and execution logic. They integrate into the workflow engine via [ComponentRegistry](src/spriteflow/components/registry.py) and can be managed through the [ComponentsPage](web/src/pages/components/ComponentsPage.tsx) UI. Single-node execution automatically resolves upstream outputs via handle-to-parameter edge injection.
+
+### Sprite Tools (Client-Side)
+
+| Tool | Description |
+|------|-------------|
+| **Sprite Sheet Tool** | 4-step workflow: Split → Edit → Export → **MAGIC Super-Resolution** (Real-ESRGAN 4x anime upscale + 1/2, 1/4, 1/8 transparent PNG variants with spritesheet merging) |
+| **Video Frames Tool** | Extract frames from video → key frame selection (cycle/uniform/diversity) → batch edit (flip, offset, **content scale**) → export PNG/GIF/ZIP |
+| **Image Editor** | AI inpainting via Jimeng, background removal, pixel-level editing |
+
+### Recent UI Improvements
+
+- **Range Sliders**: Number inputs replaced with draggable sliders for cols/rows/frames-per-row
+- **Unified Emoji Icons**: Replaced framework icon components with platform-native emoji for consistent cross-platform rendering
+- **Asset Actions**: Step 3 export buttons grouped under "Asset Actions" label with consistent sizing
 
 ---
 
