@@ -73,7 +73,6 @@ class Executor:
         router: Any = None,
         storage: Any = None,
         db: Any = None,
-        template_db: Any = None,
         timeout: float = 120.0,
         max_retries: int = 2,
     ) -> None:
@@ -81,7 +80,6 @@ class Executor:
         self.router = router
         self.storage = storage
         self.db = db
-        self.template_db = template_db
         self.timeout = timeout
         self.max_retries = max_retries
 
@@ -113,7 +111,6 @@ class Executor:
             router=self.router,
             storage=self.storage,
             db=self.db,
-            template_db=self.template_db,
             run_id=run.run_id,
         )
 

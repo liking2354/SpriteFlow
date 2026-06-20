@@ -774,6 +774,29 @@ async def execute_workflow_run(
         node_id = node.get("id", "")
         result: dict[str, Any] | None = None
 
+        # ── 强制停止检查：如果 run 中已有节点被标记为 "stopped"，跳过所有剩余节点 ──
+        async with _async_session() as check_db:
+            stopped_row = await check_db.execute(
+                text(
+                    "SELECT 1 FROM workflow_run_history "
+                    "WHERE run_id = :run_id AND status = 'stopped' LIMIT 1"
+                ),
+                {"run_id": run_id},
+            )
+            if stopped_row.first() is not None:
+                logger.info("[workflow] run_id=%s force-stopped, skipping node=%s", run_id, node_id)
+                # 将剩余 pending/running 节点也标记为 stopped
+                await check_db.execute(
+                    text(
+                        "UPDATE workflow_run_history "
+                        "SET status = 'stopped', updated_at = :now "
+                        "WHERE run_id = :run_id AND status IN ('pending', 'running')"
+                    ),
+                    {"run_id": run_id, "now": datetime.now(timezone.utc)},
+                )
+                await check_db.commit()
+                break
+
         # ── 恢复模式：跳过已成功的节点 ──
         if resume_from and node_id in node_results and not node_results[node_id].get("_failed"):
             logger.info("[workflow] resume: skipping succeeded node=%s", node_id)
@@ -1034,6 +1057,20 @@ async def execute_workflow_run(
                         logger.error(
                             "[workflow] local save error for node %s: %s", node_id, e
                         )
+
+                # ── 强制停止检查：如果节点在执行期间被用户强制停止，不覆盖 stopped 状态 ──
+                stopped_check = await bg_db.execute(
+                    text(
+                        "SELECT status FROM workflow_run_history "
+                        "WHERE run_id = :run_id AND node_id = :node_id"
+                    ),
+                    {"run_id": run_id, "node_id": node_id},
+                )
+                current_status_row = stopped_check.first()
+                if current_status_row and current_status_row[0] == "stopped":
+                    logger.info("[workflow] node=%s was force-stopped during execution, skipping DB update", node_id)
+                    node_results[node_id] = {**result, "_failed": True} if result else {"_failed": True}
+                    continue
 
                 # 更新运行记录（含修正后的 node_data，前端表单能看到正确的 image_url）
                 # 使用原生 SQL 避免 AsyncSession + update(ORMEntity) 的 rowcount 检查问题
@@ -1454,6 +1491,55 @@ async def delete_node_run_by_id_helper(db: AsyncSession, node_run_id: str) -> di
     )
     await db.flush()
     return {"detail": "Node run deleted"}
+
+
+async def force_stop_run_helper(db: AsyncSession, run_id: str) -> dict:
+    """
+    POST /api/workflow/run/{run_id}/force-stop
+    强制停止工作流运行：将所有 running/pending 节点标记为 stopped。
+
+    用于节点卡在 running 状态（AI 服务无响应、后台任务异常等）时，
+    用户可强制终止并重新触发执行。
+    """
+    now_ts = datetime.now(timezone.utc)
+
+    # 查询当前 running/pending 节点
+    result = await db.execute(
+        text(
+            "SELECT node_id, status FROM workflow_run_history "
+            "WHERE run_id = :run_id AND status IN ('running', 'pending')"
+        ),
+        {"run_id": run_id},
+    )
+    affected_nodes = [
+        {"node_id": row[0], "prev_status": row[1]}
+        for row in result.fetchall()
+    ]
+
+    if not affected_nodes:
+        return {"run_id": run_id, "stopped": 0, "detail": "No running/pending nodes to stop"}
+
+    # 批量更新为 stopped
+    await db.execute(
+        text(
+            "UPDATE workflow_run_history "
+            "SET status = 'stopped', updated_at = :now "
+            "WHERE run_id = :run_id AND status IN ('running', 'pending')"
+        ),
+        {"run_id": run_id, "now": now_ts},
+    )
+    await db.commit()
+
+    logger.info(
+        "[workflow] force-stop run_id=%s, stopped %d nodes: %s",
+        run_id, len(affected_nodes), [n["node_id"] for n in affected_nodes],
+    )
+
+    return {
+        "run_id": run_id,
+        "stopped": len(affected_nodes),
+        "nodes": affected_nodes,
+    }
 
 
 async def get_workflow_last_run(db: AsyncSession, workflow_id: str) -> dict:

@@ -17,7 +17,7 @@ import { FiZoomIn, FiZoomOut } from "react-icons/fi";
 import { TfiText } from "react-icons/tfi";
 import { MdLockOutline, MdOutlineZoomOutMap, MdSave } from "react-icons/md";
 import { LuLayoutTemplate, LuMousePointer2 } from "react-icons/lu";
-import { FaAngleDown, FaAngleLeft, FaCheck, FaPlay, FaPlus, FaRegHand, FaToolbox, FaUpload } from "react-icons/fa6";
+import { FaAngleDown, FaAngleLeft, FaCheck, FaPlay, FaPlus, FaRegHand, FaStop, FaToolbox, FaUpload } from "react-icons/fa6";
 import { FaRegEdit, FaTelegramPlane } from "react-icons/fa";
 import { IoDuplicateOutline, IoImageOutline, IoVideocamOutline } from "react-icons/io5";
 import { toast } from "react-hot-toast";
@@ -1612,6 +1612,18 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
                 }
                 return n;
               }));
+            } else if (status === "stopped") {
+              setLoadingNodes((prev) => {
+                const copy = { ...prev };
+                delete copy[id];
+                return copy;
+              });
+              setNodes((prevNodes) => prevNodes.map(n => {
+                if (n.id === id) {
+                  return { ...n, data: { ...n.data, isLoading: false, errorMsg: t('editor.forceStopped') } };
+                }
+                return n;
+              }));
             }
           });
 
@@ -1628,6 +1640,9 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
           const anyFailed = Object.values(nodesStatus).some(
             (nodeRuns) => nodeRuns[0]?.status === "failed"
           );
+          const anyStopped = Object.values(nodesStatus).some(
+            (nodeRuns) => nodeRuns[0]?.status === "stopped"
+          );
           if (allCompleted) {
             clearInterval(interval);
             setLoadingNodes({});
@@ -1641,6 +1656,14 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
             // 只有从 running 转变到 failed 时才弹 toast（页面恢复时不弹）
             if (hasSeenRunningRef.current) {
               toast.error(t('editor.workflowFailedOnNodes'));
+            }
+          } else if (anyStopped) {
+            clearInterval(interval);
+            setLoadingNodes({});
+            setIsRunning(0);
+            setHasFailedNodes(true);
+            if (hasSeenRunningRef.current) {
+              toast.error(t('editor.workflowForceStopped'));
             }
           }
           console.log("run", runData);
@@ -1709,6 +1732,36 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
       setLoadingNodes({});
       setIsRunning(0);
       setHasFailedNodes(true);
+    }
+  };
+
+  const handleForceStop = async () => {
+    if (!runId) return;
+    try {
+      const response = await axios.post(`/api/workflow/run/${runId}/force-stop`);
+      const stoppedCount = response.data?.stopped || 0;
+      if (stoppedCount > 0) {
+        toast.success(t('editor.forceStopSuccess', { count: stoppedCount }));
+      } else {
+        toast(t('editor.forceStopNoRunning'));
+      }
+      // 停止轮询
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      setLoadingNodes({});
+      setIsRunning(0);
+      setHasFailedNodes(true);
+      // 立即触发一次状态轮询以更新 UI
+      pollRunIdStatus(runId);
+    } catch (error) {
+      console.log(error);
+      if (error.response) {
+        toast.error(`Failed: ${error.response.data.detail || t('common.serverError')}`);
+      } else {
+        toast.error(`Error: ${error.message}`);
+      }
     }
   };
 
@@ -2438,6 +2491,16 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
                     </>
                   )}
                 </button>
+                {isRunning === 1 && (
+                  <button
+                    type="button"
+                    suppressHydrationWarning={true}
+                    onClick={handleForceStop}
+                    className="flex items-center gap-1.5 px-3 py-1 border border-red-500/70 bg-red-500 text-white text-sm rounded-full font-semibold group cursor-pointer hover:bg-red-600 whitespace-nowrap"
+                  >
+                    <FaStop size={12} /> {t('editor.forceStop')}
+                  </button>
+                )}
                 {hasFailedNodes && !isRunning && (
                   <button
                     type="button"
@@ -2985,6 +3048,17 @@ const NodeFlow = ({ initialNodeSchemas, initialWorkflowData }) => {
                       )}
                     </>
                   )}
+                </button>
+              )}
+              {loadingNodes[selectedNode.id] && runId && (
+                <button
+                  type="button"
+                  suppressHydrationWarning={true}
+                  onClick={handleForceStop}
+                  className="text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer rounded-lg text-white bg-red-500 px-4 py-2 border border-red-500/50 hover:bg-red-600 w-full transition-all shadow-lg shadow-red-900/20 active:scale-[0.98]"
+                >
+                  <FaStop size={14} />
+                  {t('editor.forceStop')}
                 </button>
               )}
             </div>

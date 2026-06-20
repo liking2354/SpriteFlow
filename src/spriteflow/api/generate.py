@@ -22,7 +22,6 @@ from ..asset_hub.models import GenerationJob
 from ..providers.base import Capability
 from .deps import get_router, get_storage, get_db, get_template_db
 from ..asset_hub.ingest import IngestPipeline
-from ..templates.builder import assemble_prompt
 
 router = APIRouter()
 
@@ -339,6 +338,10 @@ async def _resolve_template_prompt(req: GenerateRequest) -> tuple[str | None, di
 
     try:
         tdb = get_template_db()
+        if tdb is None:
+            return None, {}
+
+        from ..templates.builder import assemble_prompt
         prompt = await assemble_prompt(tdb, req.template_ids, req.slot_values)
 
         meta: dict = {"template_ids": req.template_ids}

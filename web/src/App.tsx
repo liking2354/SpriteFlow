@@ -9,9 +9,6 @@ import { RoutingPage } from "@/pages/Routing";
 import { EditorPage } from "@/pages/Editor";
 import { SpriteSheetPage } from "@/pages/SpriteSheet";
 import { VideoPage } from "@/pages/Video";
-import { TemplatesPage } from "@/pages/Templates";
-import { GraphListPage } from "@/pages/GraphList";
-import { GraphEditorPage } from "@/pages/GraphEditor";
 import { VideoFramesPage } from "@/pages/VideoFrames";
 import { WorkflowListPage } from "@/pages/workflow/WorkflowList";
 import { WorkflowEditorPage } from "@/pages/workflow/WorkflowEditor";
@@ -35,10 +32,10 @@ export function App() {
         <Route path="/editor" element={<EditorPage />} />
         <Route path="/spritesheet" element={<SpriteSheetPage />} />
         <Route path="/routing" element={<RoutingPage />} />
-        <Route path="/templates" element={<TemplatesPage />} />
-        <Route path="/graphs" element={<GraphListPage />} />
-        <Route path="/graphs/:graphId/edit" element={<GraphEditorPage />} />
-        <Route path="/graphs/new" element={<GraphEditorPage />} />
+        <Route path="/templates" element={<Navigate to="/workflow" replace />} />
+        <Route path="/graphs" element={<Navigate to="/workflow" replace />} />
+        <Route path="/graphs/:graphId/edit" element={<Navigate to="/workflow" replace />} />
+        <Route path="/graphs/new" element={<Navigate to="/workflow" replace />} />
         <Route path="/video-frames" element={<VideoFramesPage />} />
         <Route path="/workflow" element={<WorkflowListPage />} />
         <Route path="/workflow/:id" element={<WorkflowEditorPage />} />

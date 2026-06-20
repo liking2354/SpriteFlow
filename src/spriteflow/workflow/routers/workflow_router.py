@@ -26,6 +26,7 @@ from ..workflow_helper import (
     architect_workflow_helper,
     poll_architect_result_helper,
     delete_node_run_by_id_helper,
+    force_stop_run_helper,
     update_workflow_category_helper,
     get_workflow_api_inputs_helper,
     execute_workflow_via_api_helper,
@@ -203,6 +204,17 @@ async def resume_workflow(
 async def get_run_status(run_id: str, db: AsyncSession = Depends(get_db)):
     try:
         return await get_run_status_helper(db, run_id)
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/run/{run_id}/force-stop")
+async def force_stop_run(run_id: str, db: AsyncSession = Depends(get_db)):
+    """强制停止工作流运行，将所有 running/pending 节点标记为 stopped。"""
+    try:
+        return await force_stop_run_helper(db, run_id)
     except Exception as e:
         if isinstance(e, HTTPException):
             raise e

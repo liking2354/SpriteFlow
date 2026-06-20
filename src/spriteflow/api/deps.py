@@ -10,16 +10,12 @@ from ..storage.base import StorageBackend
 from ..providers.router import CapabilityRouter
 from ..engine.executor import Executor
 
-if TYPE_CHECKING:
-    from ..templates.db import TemplateDB
-
 # ---- 全局单例（由 app.py lifespan 初始化） ----
 
 _db: AssetDB | None = None
 _storage: StorageBackend | None = None
 _router: CapabilityRouter | None = None
 _executor: Executor | None = None
-_template_db: TemplateDB | None = None  # noqa: F821 — TYPE_CHECKING only
 
 
 def _get_peer_modules() -> list:
@@ -116,13 +112,11 @@ def set_executor(executor: Executor) -> None:
         peer._executor = executor
 
 
-def get_template_db() -> TemplateDB:
-    assert _template_db is not None, "模板数据库未初始化"
-    return _template_db
+def get_template_db():
+    """已废弃：模板系统已移除，返回 None。调用方需自行处理 None 情况。"""
+    return None
 
 
-def set_template_db(db: TemplateDB) -> None:
-    global _template_db
-    _template_db = db
-    for peer in _get_peer_modules():
-        peer._template_db = db
+def set_template_db(db):
+    """已废弃：模板系统已移除，空操作。"""
+    pass

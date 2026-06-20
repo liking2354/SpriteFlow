@@ -27,9 +27,7 @@ from ..providers.router import CapabilityRouter
 from ..engine.cache import CacheManager
 from ..engine.executor import Executor
 from ..engine.video_worker import VideoWorker
-from ..templates.db import TemplateDB
-from ..templates.seed import PRESET_TEMPLATES
-from .deps import set_db, set_storage, set_router, set_executor, set_template_db
+from .deps import set_db, set_storage, set_router, set_executor
 
 # 导入节点以触发注册
 from ..nodes import *  # noqa: F401, F403
@@ -40,8 +38,6 @@ from .routing import router as routing_router
 from .generate import router as generate_router
 from .jobs import router as jobs_router
 from .videos import router as videos_router
-from ..templates.api import router as templates_router
-from .graphs import router as graphs_router
 from .config import router as config_router
 from .menu import router as menu_router
 from .video_frames import router as video_frames_router
@@ -163,30 +159,14 @@ async def lifespan(app: FastAPI):
         f"key_set={'yes' if bool(settings.openrouter_api_key or router._credentials.get('openrouter')) else 'NO'}"
     )
 
-    # 初始化模板数据库（需在 Executor 之前，Executor 依赖 template_db）
-    template_db = TemplateDB()
-    await template_db.connect()
-    await template_db.init_tables()
-    set_template_db(template_db)
-    print("[SpriteFlow] 模板数据库初始化成功")
-
     # 初始化执行器
     executor = Executor(
         cache=CacheManager(),
         router=router,
         storage=storage,
         db=db,
-        template_db=template_db,
     )
     set_executor(executor)
-
-    # 注入预置模板数据（仅首次）
-    count = await template_db.count()
-    if not count:
-        for t in PRESET_TEMPLATES:
-            await template_db.create(t)
-        preset_count = len(PRESET_TEMPLATES)
-        print(f"[SpriteFlow] 预置模板数据注入完成: {preset_count} 个模板")
 
     # 启动视频任务后台 worker（独立 asyncio 任务）
     ingest = IngestPipeline(storage=storage, db=db)
@@ -203,7 +183,6 @@ async def lifespan(app: FastAPI):
     # 清理
     await video_worker.stop()
     await db.close()
-    await template_db.close()
 
 
 async def _restore_config_from_db(db, router) -> None:
@@ -324,8 +303,6 @@ def create_app() -> FastAPI:
     app.include_router(generate_router, prefix="/api", tags=["generate"])
     app.include_router(jobs_router, prefix="/api", tags=["jobs"])
     app.include_router(videos_router, prefix="/api", tags=["videos"])
-    app.include_router(templates_router, prefix="/api", tags=["templates"])
-    app.include_router(graphs_router, prefix="/api", tags=["graphs"])
     app.include_router(config_router, prefix="/api", tags=["config"])
     app.include_router(menu_router, prefix="/api", tags=["menu"])
     app.include_router(video_frames_router, prefix="/api", tags=["video-frames"])

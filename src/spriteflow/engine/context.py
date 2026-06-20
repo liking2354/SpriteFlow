@@ -24,7 +24,6 @@ class Context:
     router: Any = None       # CapabilityRouter，运行时注入
     storage: Any = None      # StorageBackend，运行时注入
     db: Any = None           # AssetDB，运行时注入
-    template_db: Any = None  # TemplateDB，运行时注入（业务节点拼装 prompt 用）
     run_id: str = ""
     _outputs: dict[str, dict[str, Any]] = field(default_factory=dict)  # node_id → {port: value}
     _input_hashes: dict[str, dict[str, str]] = field(default_factory=dict)  # node_id → {port: hash}

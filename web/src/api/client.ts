@@ -10,10 +10,6 @@ import type {
   JobItem,
   JobListResponse,
   NodeSchema,
-  PromptTemplate,
-  TemplatePreviewRequest,
-  TemplatePreviewResult,
-  TemplateListResponse,
   RoutingResponse,
   StreamEvent,
   UpdateConfigRequest,
@@ -22,11 +18,6 @@ import type {
   VideoListResponse,
   VideoStatus,
   VideoTaskItem,
-  PipelineGraphModel,
-  GraphListItem,
-  GraphRunStatus,
-  GraphRerunResponse,
-  GraphRunListItem,
   VFCreateJobResponse,
   VFJobResponse,
   VFIndexData,
@@ -266,121 +257,6 @@ export const api = {
   deleteVideoTask: (id: string) =>
     request<{ deleted: boolean; id: string }>(`/videos/tasks/${id}`, { method: "DELETE" }),
 
-  // Templates — 统一 API
-  listTemplates: (params?: { type?: string; limit?: number; offset?: number }) => {
-    const q = new URLSearchParams();
-    if (params?.type) q.set("type", params.type);
-    if (params?.limit) q.set("limit", String(params.limit));
-    if (params?.offset) q.set("offset", String(params.offset));
-    const qs = q.toString();
-    return request<TemplateListResponse>(`/templates${qs ? `?${qs}` : ""}`);
-  },
-  getTemplate: (id: string) => request<PromptTemplate>(`/templates/${id}`),
-  createTemplate: (tpl: PromptTemplate) =>
-    request<PromptTemplate>("/templates", {
-      method: "POST",
-      body: JSON.stringify(tpl),
-    }),
-  updateTemplate: (id: string, tpl: PromptTemplate) =>
-    request<PromptTemplate>(`/templates/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(tpl),
-    }),
-  deleteTemplate: (id: string) =>
-    request<{ ok: boolean }>(`/templates/${id}`, { method: "DELETE" }),
-  batchDeleteTemplates: (ids: string[]) =>
-    request<{ ok: boolean; deleted: number }>("/templates/batch-delete", {
-      method: "POST",
-      body: JSON.stringify({ ids }),
-    }),
-
-  // Templates — 按类型筛选
-  listTemplatesByType: (type: string) =>
-    request<TemplateListResponse>(`/templates/by-type/${type}`),
-
-  // Templates — 预览
-  previewTemplate: (req: TemplatePreviewRequest) =>
-    request<TemplatePreviewResult>("/templates/preview", {
-      method: "POST",
-      body: JSON.stringify(req),
-    }),
-
-  // Templates — 注入预置数据
-  initTemplatePresets: () =>
-    request<{ ok: boolean }>("/templates/init-presets", { method: "POST" }),
-
-  // Graphs
-  listGraphs: async (params?: { limit?: number; offset?: number }) => {
-    const q = new URLSearchParams();
-    if (params?.limit) q.set("limit", String(params.limit));
-    if (params?.offset) q.set("offset", String(params.offset));
-    const qs = q.toString();
-    const res = await request<{ graphs: GraphListItem[]; total: number; limit: number; offset: number }>(
-      `/graphs${qs ? `?${qs}` : ""}`
-    );
-    return res;
-  },
-  getGraph: (id: string) => request<PipelineGraphModel>(`/graphs/${id}`),
-  createGraph: (graph: PipelineGraphModel) =>
-    request<PipelineGraphModel>("/graphs", {
-      method: "POST",
-      body: JSON.stringify(graph),
-    }),
-  updateGraph: (id: string, graph: PipelineGraphModel) =>
-    request<PipelineGraphModel>(`/graphs/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(graph),
-    }),
-  deleteGraph: (id: string) =>
-    request<{ status: string; id: string }>(`/graphs/${id}`, { method: "DELETE" }),
-  searchGraphs: async (q: string) => {
-    const params = new URLSearchParams({ q });
-    const res = await request<{ graphs: GraphListItem[]; total: number }>(
-      `/graphs/search?${params}`
-    );
-    return res.graphs;
-  },
-  /** 获取预设管线图列表 */
-  listGraphPresets: () =>
-    request<{ presets: Array<{ id: string; name: string; description: string; tags: string[]; node_count: number; edge_count: number }> }>(
-      "/graphs/presets"
-    ),
-  /** 获取指定预设管线图完整数据 */
-  getGraphPreset: (presetId: string) =>
-    request<PipelineGraphModel>(`/graphs/presets/${presetId}`),
-  runGraph: (req: { graph?: PipelineGraphModel; graph_id?: string }) =>
-    request<GraphRunStatus>("/graphs/run", {
-      method: "POST",
-      body: JSON.stringify(req),
-    }),
-  /** 运行已保存的管线图（按 graph_id） */
-  runGraphById: (graphId: string) =>
-    request<GraphRunStatus>(`/graphs/${graphId}/run`, { method: "POST" }),
-  getGraphRun: (runId: string) =>
-    request<GraphRunStatus>(`/graphs/runs/${runId}`),
-  /** 历史运行列表 */
-  listGraphRuns: (limit?: number) => {
-    const qs = limit ? `?limit=${limit}` : "";
-    return request<{ runs: GraphRunListItem[]; total: number }>(`/graphs/runs${qs}`);
-  },
-  /** 单节点重跑 */
-  rerunGraphNode: (runId: string, nodeId: string, mode?: string) => {
-    const qs = mode ? `?mode=${mode}` : "";
-    return request<GraphRerunResponse>(`/graphs/runs/${runId}/rerun/${nodeId}${qs}`, {
-      method: "POST",
-    });
-  },
-  /** 冷启动执行单个节点（不需要先运行全图） */
-  runGraphNode: (graphId: string, nodeId: string) => {
-    return request<{ runId: string; graphId: string; nodeId: string; status: string }>(
-      `/graphs/${graphId}/nodes/${nodeId}/run`,
-      { method: "POST" },
-    );
-  },
-  /** 获取图的最近一次运行结果（用于页面重进时恢复展示） */
-  getGraphLatestRunResults: (graphId: string) =>
-    request<import("./types").GraphLatestRunResults>(`/graphs/${graphId}/latest-run-results`),
-
   // ===== Video Frames (视频序列帧) =====
   /** 上传视频探测元数据 */
   probeVideo: async (file: File): Promise<VFProbeResponse> => {
@@ -520,42 +396,6 @@ export function subscribeGenerateStream(
       onEvent(JSON.parse(e.data) as StreamEvent);
     } catch {}
   };
-  if (onError) es.onerror = onError;
-  return () => es.close();
-}
-
-/** SSE 订阅管线图执行进度 */
-const GRAPH_SSE_EVENT_TYPES = [
-  "run_started", "node_queued", "node_started",
-  "node_completed", "node_failed", "run_completed", "run_failed",
-] as const;
-
-export function subscribeGraphRunStream(
-  runId: string,
-  onEvent: (evt: { type: string; nodeId?: string; thumbnail?: string | null; error?: string | null; message?: string; assetId?: string | null; url?: string | null; cacheHit?: boolean; duration?: number; summary?: import("./types").GraphRunSummary | null }) => void,
-  onError?: (err: Event) => void
-): () => void {
-  const es = new EventSource(`${BASE}/graphs/runs/${runId}/stream`);
-
-  const handler = (e: MessageEvent) => {
-    try {
-      onEvent(JSON.parse(e.data));
-    } catch {}
-  };
-
-  // 监听所有命名事件（SSE event: 字段），注入 type 方便上游 switch
-  for (const eventType of GRAPH_SSE_EVENT_TYPES) {
-    es.addEventListener(eventType, (e) => {
-      try {
-        const data = JSON.parse((e as MessageEvent).data);
-        onEvent({ ...data, type: eventType });
-      } catch {}
-    });
-  }
-
-  // 兜底：未命名消息或回退
-  es.onmessage = handler;
-
   if (onError) es.onerror = onError;
   return () => es.close();
 }

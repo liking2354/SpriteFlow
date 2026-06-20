@@ -75,8 +75,6 @@ const DEFAULT_ITEMS: MenuItem[] = [
   { id: "spritesheet",  to: "/spritesheet",  i18nKey: "nav.spritesheet",  section: "generate", visible: true, order: 3 },
   { id: "videoFrames",  to: "/video-frames", i18nKey: "nav.videoFrames",  section: "generate", visible: true, order: 4 },
   { id: "assets",       to: "/assets",       i18nKey: "nav.assets",       section: "manage",   visible: true, order: 6 },
-  { id: "templates",    to: "/templates",    i18nKey: "nav.templates",    section: "manage",   visible: true, order: 7 },
-  { id: "graph",        to: "/graphs",       i18nKey: "nav.graph",        section: "manage",   visible: true, order: 8 },
   { id: "routing",      to: "/routing",      i18nKey: "nav.routing",      section: "manage",   visible: true, order: 9 },
   { id: "workflow",     to: "/workflow",     i18nKey: "nav.workflow",     section: "manage",   visible: true, order: 10 },
   { id: "modelManager", to: "/model-manager", i18nKey: "nav.modelManager", section: "manage", visible: true, order: 11 },

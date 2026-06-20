@@ -13,7 +13,7 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
 ### Key Capabilities
 
 - **AI Generation** — Text-to-Image, Image-to-Image, Multi-Image Fusion, Sequential Frame Generation
-- **AI Workflow** — Visual node editor with presets, real-time execution, resume-from-failed, text/image/video/audio nodes
+- **AI Workflow** — Visual node editor with presets, real-time execution, resume-from-failed, force-stop (terminate stuck nodes), text/image/video/audio nodes
 - **Model Manager** — Multi-provider model registry with channels, routing, and cost tracking
 - **Character Pipeline** — Master template → direction variants → animation sprites → sprite sheets
 - **Image Processing** — Background removal, sprite alignment, sprite sheet packing with 4-step workflow (split → edit → export → MAGIC super-resolution), video frame extraction with key frame selection (cycle detection / uniform / diversity) and content scaling, image grid merge
@@ -25,6 +25,7 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
 - **Custom Components** — Extensible plugin framework for custom AI nodes with credential management, testing, and validation
 - **Batch Production** — Spec × Character × Action matrix generation
 - **Capability Routing** — Multi-provider routing with fallback chains and hot reload
+- **Force Stop** — Terminate stuck workflow nodes and resume from failed
 
 ---
 
@@ -36,7 +37,7 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
 |----------|------------|---------|
 | **Web Framework** | FastAPI + Uvicorn | REST API + SSE streaming |
 | **Data Validation** | Pydantic + pydantic-settings | Request model validation & env config |
-| **Async Database** | aiosqlite | Assets/tasks/templates/config persistence |
+| **Async Database** | aiosqlite | Assets/tasks/config persistence |
 | **AI Clients** | openai + replicate + ollama | Multi-provider model client SDKs |
 | **ORM** | SQLAlchemy (asyncio) | Workflow/model manager persistence |
 | **Image Processing** | Pillow + NumPy | Format conversion, sprite alignment, spritesheet packing |
@@ -45,7 +46,7 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
 | **Config Management** | PyYAML + python-dotenv | YAML routing config & .env vars |
 | **HTTP Client** | httpx + urllib | Provider API calls (sync/async) |
 | **Cloud Storage** | cos-python-sdk-v5 | Tencent COS object storage |
-| **SSE** | sse-starlette | Graph execution progress streaming |
+| **SSE** | sse-starlette | Workflow execution progress streaming |
 | **File Upload** | python-multipart | FormData file upload |
 | **Async I/O** | aiofiles | Async file reads/writes |
 | **Package Management** | uv + hatchling | Dependency management & build |
@@ -105,10 +106,10 @@ SpriteFlow is a **DAG-node pipeline platform** that orchestrates AI image genera
                          │ HTTP / SSE
 ┌────────────────────────▼─────────────────────────────────┐
 │                    FastAPI Backend                        │
-│     /api/nodes · /api/graphs · /api/generate             │
-│     /api/assets · /api/videos · /api/routing             │
-│     /api/menu · /api/config · /api/components            │
-│     /api/image-editor · /api/workflow · /api/model-manager│
+│     /api/workflow · /api/model-manager · /api/components │
+│     /api/assets · /api/generate · /api/videos             │
+│     /api/routing · /api/menu · /api/config               │
+│     /api/image-editor · /api/video-frames                 │
 └────────────────────────┬─────────────────────────────────┘
                          │
       ┌──────────────────┼─────────────────────┐
@@ -194,8 +195,6 @@ SpriteFlow/
 │   └── routing.yaml          # Capability → Provider routing
 ├── data/                     # Runtime data (DB, storage, cache)
 ├── docs/                     # Design documents
-├── graphs/                   # Pipeline graph definitions (JSON)
-│   └── presets/              # Preset graph templates
 ├── runs/                     # Runtime output (video frames, matte results)
 ├── scripts/                  # Utility scripts
 ├── src/spriteflow/           # Backend (Python)
@@ -204,7 +203,6 @@ SpriteFlow/
 │   │   ├── assets.py         # Asset CRUD + AI processing
 │   │   ├── config.py         # Provider configuration
 │   │   ├── generate.py       # Quick generation + batch
-│   │   ├── graphs.py         # Pipeline graph CRUD + execution
 │   │   ├── jobs.py           # Generation job records
 │   │   ├── menu.py           # Sidebar menu persistence
 │   │   ├── nodes.py          # Node schema listing
@@ -215,10 +213,6 @@ SpriteFlow/
 │   │   ├── db.py             # SQLite CRUD (assets, jobs, configs)
 │   │   ├── ingest.py         # Upload + ingest pipeline
 │   │   └── models.py         # Data models + SQL schema
-│   ├── graph/               # Pipeline graph validation & DAG build
-│   │   ├── bridge.py         # Graph → DAG conversion & cycle detection
-│   │   ├── models.py         # Graph data models
-│   │   └── store.py          # Graph persistence (SQLite/JSON)
 │   ├── engine/               # Execution engine
 │   │   ├── cache.py          # Content-addressable cache
 │   │   ├── context.py        # Execution context
@@ -277,18 +271,12 @@ SpriteFlow/
 │   │   ├── schema_bridge.py  # Component ↔ node-schema converter
 │   │   └── ai/               # AI components
 │   │       └── seedance_pro_fast.py  # Seedance 1.0 Pro Fast
-│   ├── templates/            # Prompt template system
-│   │   ├── api.py            # Template CRUD API
-│   │   ├── db.py             # Template SQLite layer
-│   │   ├── models.py         # Template data models
-│   │   └── seed.py           # Preset templates
 │   ├── workflow/             # AI workflow engine
 │   │   ├── models.py         # Workflow + Preset data models
 │   │   ├── database.py       # SQLite layer (workflows, presets, runs)
-│   │   ├── workflow_helper.py # Workflow CRUD + preset seeding
+│   │   ├── workflow_helper.py # Workflow CRUD + execution + force-stop
 │   │   ├── routers/          # FastAPI routers
-│   │   │   ├── app_router.py       # App-level workflow settings
-│   │   │   ├── workflow_router.py  # Workflow CRUD + preset endpoints
+│   │   │   ├── workflow_router.py  # Workflow CRUD + run + force-stop + preset endpoints
 │   │   │   ├── cost_router.py      # Cost estimation endpoint
 │   │   │   └── model_router.py     # Model listing endpoint
 │   │   └── services/         # Business logic
@@ -303,7 +291,6 @@ SpriteFlow/
 ├── web/                      # Frontend (React + TypeScript)
 │   └── src/
 │       ├── components/       # UI components
-│       │   ├── graph/        # Pipeline graph editor
 │       │   ├── layout/       # App shell, sidebar, topbar
 │       │   ├── InteractiveEditor/  # Interactive image editor
 │       │   └── PixelEditor/  # Pixel-level sprite editor
@@ -311,11 +298,8 @@ SpriteFlow/
 │       │   ├── Assets/       # Asset library
 │       │   ├── Editor/       # Interactive editor
 │       │   ├── Generate/     # Quick generation
-│       │   ├── GraphEditor/  # Graph pipeline editor
-│       │   ├── GraphList/    # Graph list
 │       │   ├── Routing/      # Capability routing
 │       │   ├── SpriteSheet/  # Sprite sheet tools
-│       │   ├── Templates/    # Prompt templates
 │       │   ├── Video/        # Video generation
 │       │   ├── VideoFrames/  # Video frame extraction
 │       │   ├── model-manager/  # Model manager (channels + routes)
